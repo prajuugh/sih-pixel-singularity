@@ -1,8 +1,19 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "../pages/LoginPage";
+
 import AdminDashboard from "../pages/admin/AdminDashboard";
+import ManageUsers from "../pages/admin/ManageUsers";
+
 import OfficerDashboard from "../pages/officer/OfficerDashboard";
+import OfficerCalendar from "../pages/officer/OfficerCalendar";
+import OfficerRequests from "../pages/officer/OfficerRequests";
+import LiveMap from "../pages/officer/LiveMap";
+
 import TeamsDashboard from "../pages/teams/TeamsDashboard";
+import TeamRequests from "../pages/teams/TeamRequests";
+import TeamCalendar from "../pages/teams/TeamCalendar";
+import CheckStatus from "../pages/teams/CheckStatus";
+
 import ProtectedRoute from "./ProtectedRoute";
 
 export default function AppRoutes() {
@@ -10,6 +21,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
+      {/* Admin */}
       <Route
         path="/admin"
         element={
@@ -19,6 +31,16 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute allowedRole="admin">
+            <ManageUsers />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Officer */}
+      <Route
         path="/officer"
         element={
           <ProtectedRoute allowedRole="officer">
@@ -27,10 +49,60 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/officer/calendar"
+        element={
+          <ProtectedRoute allowedRole="officer">
+            <OfficerCalendar />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/officer/requests"
+        element={
+          <ProtectedRoute allowedRole="officer">
+            <OfficerRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/officer/live-map"
+        element={
+          <ProtectedRoute allowedRole="officer">
+            <LiveMap />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Teams */}
+      <Route
         path="/teams"
         element={
           <ProtectedRoute allowedRole="teams">
             <TeamsDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/requests"
+        element={
+          <ProtectedRoute allowedRole="teams">
+            <TeamRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/calendar"
+        element={
+          <ProtectedRoute allowedRole="teams">
+            <TeamCalendar />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/check-status"
+        element={
+          <ProtectedRoute allowedRole="teams">
+            <CheckStatus />
           </ProtectedRoute>
         }
       />
