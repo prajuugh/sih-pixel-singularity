@@ -1,14 +1,25 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Train, User, Lock, Eye, EyeOff, LogIn } from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogin = (e) => {
     e.preventDefault();
-    console.log({ username, password });
+    const result = login(username, password);
+    if (result.success) {
+      navigate(`/${result.role}`);
+    } else {
+      setError(result.message);
+    }
   };
 
   return (
@@ -80,6 +91,8 @@ export default function LoginPage() {
               )}
             </button>
           </div>
+
+          {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
           <div className="text-right mb-5">
             <a href="#" className="text-green-700 text-sm font-semibold hover:underline">
