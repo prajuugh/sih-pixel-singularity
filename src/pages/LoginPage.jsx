@@ -28,7 +28,14 @@ export default function LoginPage() {
       </header>
 
       {/* Background + card */}
-      <div className="relative flex-1 flex items-center justify-center bg-[url('/train-bg.jpg')] bg-cover bg-center">
+      <div
+        className="relative flex-1 flex items-center justify-center"
+        style={{
+          backgroundImage: "url('/train-bg.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
         <div className="absolute inset-0 bg-green-50/85" />
 
         <form
