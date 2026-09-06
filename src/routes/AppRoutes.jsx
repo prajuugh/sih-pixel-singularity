@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "../pages/LoginPage";
 
 import AdminDashboard from "../pages/admin/AdminDashboard";
-import ManageUsers from "../pages/admin/ManageUsers";
 
 import OfficerDashboard from "../pages/officer/OfficerDashboard";
 import OfficerCalendar from "../pages/officer/OfficerCalendar";
@@ -31,10 +30,10 @@ export default function AppRoutes() {
         }
       />
       <Route
-        path="/admin/users"
+        path="/admin"
         element={
           <ProtectedRoute allowedRole="admin">
-            <ManageUsers />
+            <AdminDashboard />
           </ProtectedRoute>
         }
       />
