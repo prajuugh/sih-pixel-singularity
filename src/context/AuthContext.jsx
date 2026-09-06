@@ -1,18 +1,31 @@
-import { createContext, useState } from "react";
-import { loginRequest } from "../utils/api";
+import { createContext, useState, useEffect } from "react";
+import { mockUsers } from "../utils/mockUsers";
 
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const stored = localStorage.getItem("rbps_user");
+    return stored ? JSON.parse(stored) : null;
+  });
 
-  const login = async (username, password) => {
-    const result = await loginRequest(username, password);
-    if (result.success) {
-      setUser(result.user);
-      return { success: true, role: result.user.role };
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem("rbps_user", JSON.stringify(user));
+    } else {
+      localStorage.removeItem("rbps_user");
     }
-    return { success: false, message: result.message };
+  }, [user]);
+
+  const login = (username, password) => {
+    const found = mockUsers.find(
+      (u) => u.username === username && u.password === password
+    );
+    if (found) {
+      setUser(found);
+      return { success: true, role: found.role };
+    }
+    return { success: false, message: "Invalid username or password" };
   };
 
   const logout = () => setUser(null);
