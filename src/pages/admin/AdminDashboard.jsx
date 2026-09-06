@@ -1,4 +1,5 @@
 import { useState } from "react";
+import UserMenu from "../../components/common/UserMenu";
 import {
   Train,
   Calendar,
@@ -77,7 +78,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-green-800 text-white flex items-center justify-between px-8 py-4">
         <div className="flex items-center gap-3">
           <Train size={26} />
@@ -91,18 +91,11 @@ export default function AdminDashboard() {
             <p>Safe Tracks</p>
             <p>Reliable Journeys</p>
           </div>
-          <div className="flex items-center gap-2 bg-green-700/50 rounded-full pl-1 pr-3 py-1">
-            <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-              <Users size={16} />
-            </div>
-            <span className="text-sm font-medium">Admin User</span>
-            <ChevronDown size={14} />
-          </div>
+          <UserMenu />
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-8 py-8">
-        {/* Title row */}
         <div className="flex items-start justify-between mb-6">
           <div>
             <p className="text-xs font-semibold text-green-700 tracking-wider mb-1">USERS</p>
@@ -126,7 +119,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Stat cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <StatCard icon={<Users size={22} className="text-green-700" />} label="Total Users" value={users.length} delta="+2 from last month" />
           <StatCard icon={<Users size={22} className="text-green-700" />} label="Management Team" value={users.filter((u) => u.role === "Teams").length} delta="+1 from last month" />
@@ -134,7 +126,6 @@ export default function AdminDashboard() {
           <StatCard icon={<Settings size={22} className="text-green-700" />} label="Admins" value={users.filter((u) => u.role === "Admin").length} delta="+1 from last month" />
         </div>
 
-        {/* Users by Department */}
         <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
@@ -149,7 +140,6 @@ export default function AdminDashboard() {
           <DeptBar label="Control (Officers)" count={users.filter((u) => u.department === "Control").length} total={users.length} />
         </div>
 
-        {/* All Users table */}
         <div className="bg-white border border-gray-200 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
@@ -225,7 +215,6 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {/* Add User Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <form
