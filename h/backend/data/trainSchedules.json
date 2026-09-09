@@ -1,0 +1,190 @@
+[
+    {
+        "trainNo": "12627",
+        "trainName": "Karnataka Express",
+        "source": "Bengaluru",
+        "destination": "New Delhi",
+
+        "operatingDays": [
+            "MON",
+            "TUE",
+            "WED",
+            "THU",
+            "FRI",
+            "SAT",
+            "SUN"
+        ],
+
+        "route": [
+            {
+                "trackId": "KA-T-000001",
+                "arrival": "18:30",
+                "departure": "18:35"
+            },
+            {
+                "trackId": "KA-T-000002",
+                "arrival": "18:35",
+                "departure": "18:42"
+            },
+            {
+                "trackId": "KA-T-000003",
+                "arrival": "18:42",
+                "departure": "18:49"
+            },
+            {
+                "trackId": "KA-T-000004",
+                "arrival": "18:49",
+                "departure": "18:56"
+            },
+            {
+                "trackId": "KA-T-000005",
+                "arrival": "18:56",
+                "departure": "19:03"
+            }
+        ]
+    },
+
+    {
+        "trainNo": "16526",
+        "trainName": "Kanyakumari Express",
+        "source": "Bengaluru",
+        "destination": "Kanyakumari",
+
+        "operatingDays": [
+            "MON",
+            "WED",
+            "FRI",
+            "SUN"
+        ],
+
+        "route": [
+            {
+                "trackId": "KA-T-000003",
+                "arrival": "19:15",
+                "departure": "19:22"
+            },
+            {
+                "trackId": "KA-T-000004",
+                "arrival": "19:22",
+                "departure": "19:29"
+            },
+            {
+                "trackId": "KA-T-000005",
+                "arrival": "19:29",
+                "departure": "19:36"
+            },
+            {
+                "trackId": "KA-T-000006",
+                "arrival": "19:36",
+                "departure": "19:43"
+            },
+            {
+                "trackId": "KA-T-000007",
+                "arrival": "19:43",
+                "departure": "19:50"
+            }
+        ]
+    },
+
+    {
+        "trainNo": "22691",
+        "trainName": "Rajdhani Express",
+        "source": "Bengaluru",
+        "destination": "Hazrat Nizamuddin",
+
+        "operatingDays": [
+            "MON",
+            "THU",
+            "SAT"
+        ],
+
+        "route": [
+            {
+                "trackId": "KA-T-000001",
+                "arrival": "20:00",
+                "departure": "20:05"
+            },
+            {
+                "trackId": "KA-T-000002",
+                "arrival": "20:05",
+                "departure": "20:12"
+            },
+            {
+                "trackId": "KA-T-000003",
+                "arrival": "20:12",
+                "departure": "20:19"
+            }
+        ]
+    },
+
+    {
+        "trainNo": "12027",
+        "trainName": "Shatabdi Express",
+        "source": "Chennai",
+        "destination": "Bengaluru",
+
+        "operatingDays": [
+            "MON",
+            "TUE",
+            "WED",
+            "THU",
+            "FRI",
+            "SAT",
+            "SUN"
+        ],
+
+        "route": [
+            {
+                "trackId": "KA-T-000004",
+                "arrival": "20:30",
+                "departure": "20:35"
+            },
+            {
+                "trackId": "KA-T-000005",
+                "arrival": "20:35",
+                "departure": "20:42"
+            },
+            {
+                "trackId": "KA-T-000006",
+                "arrival": "20:42",
+                "departure": "20:49"
+            }
+        ]
+    },
+
+    {
+        "trainNo": "16515",
+        "trainName": "Karwar Express",
+        "source": "Bengaluru",
+        "destination": "Karwar",
+
+        "operatingDays": [
+            "TUE",
+            "THU",
+            "SAT"
+        ],
+
+        "route": [
+            {
+                "trackId": "KA-T-000002",
+                "arrival": "21:00",
+                "departure": "21:07"
+            },
+            {
+                "trackId": "KA-T-000003",
+                "arrival": "21:07",
+                "departure": "21:14"
+            },
+            {
+                "trackId": "KA-T-000004",
+                "arrival": "21:14",
+                "departure": "21:21"
+            },
+            {
+                "trackId": "KA-T-000005",
+                "arrival": "21:21",
+                "departure": "21:28"
+            }
+        ]
+    }
+]
