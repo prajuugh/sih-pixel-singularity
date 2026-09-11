@@ -2,6 +2,7 @@
 const { generateKarnatakaTracks } = require("./import_tracks");
 const { generateSeedData } = require("./seed_data");
 const { query, fallbackStore } = require("../src/config/database");
+const { hydrateLocalStore } = require("../src/services/local-store.service");
 
 async function initializeDatabase() {
   console.log("=== Automatic Block Planning System — Database Initialization ===");
@@ -26,6 +27,13 @@ async function initializeDatabase() {
   fallbackStore.train_route_segments = seedData.trainRouteSegments;
   fallbackStore.goods_forecasts = seedData.goodsForecasts;
   fallbackStore.corridor_availability = seedData.corridorAvailability;
+
+  const localState = hydrateLocalStore(fallbackStore);
+  console.log(
+    localState.restored
+      ? `Restored ${localState.requestCount} requests from the local JSON store.`
+      : `Created local JSON store with ${localState.requestCount} seed requests.`
+  );
 
   // Try DB queries to seed PostgreSQL if online
   try {

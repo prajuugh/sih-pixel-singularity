@@ -17,6 +17,20 @@ function delay(data, ms = 200) {
   return new Promise((resolve) => setTimeout(() => resolve(data), ms));
 }
 
+function getTokenRole(token) {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const decoded = JSON.parse(atob(padded));
+    return decoded?.role ? String(decoded.role).toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Auth ----
 export async function loginRequest(username, password) {
   try {
@@ -45,7 +59,9 @@ function getAuthHeaders(defaultRole = "TEAMS") {
   let user = null;
   try {
     user = JSON.parse(localStorage.getItem("rbps_user") || "null");
-  } catch (e) {}
+  } catch {
+    localStorage.removeItem("rbps_user");
+  }
 
   const role = (user?.role || defaultRole).toUpperCase();
   const email = user?.email || (role === "OFFICER" ? "officer@rbps.com" : (role === "TEAMS" ? "teams@rbps.com" : "admin@rbps.com"));
@@ -55,8 +71,12 @@ function getAuthHeaders(defaultRole = "TEAMS") {
     "x-user-role": role,
     "x-user-email": email,
   };
-  if (token) {
+  // The backend gives a valid JWT priority over the mock-user headers. Only
+  // forward it when it belongs to the role currently active in the UI.
+  if (token && getTokenRole(token) === role) {
     headers["Authorization"] = `Bearer ${token}`;
+  } else if (token) {
+    localStorage.removeItem("rbps_token");
   }
   return headers;
 }
@@ -115,6 +135,11 @@ export async function fetchRequests() {
   return delay(mockRequests);
 }
 
+export function buildRequestId(department, existingCount = 0) {
+  const deptCode = String(department || "ENG").substring(0, 3).toUpperCase();
+  return `${deptCode}-2026-${String(Number(existingCount) + 1).padStart(5, "0")}`;
+}
+
 export async function submitRequest(payload) {
   try {
     const headers = getAuthHeaders("TEAMS");
@@ -125,13 +150,21 @@ export async function submitRequest(payload) {
     });
     if (res.ok) {
       const json = await res.json();
-      return { success: true, requestId: json.data.request_id, data: json.data };
+      const requestId = json.data?.request_id || payload.requestId;
+      return { success: true, requestId, data: json.data };
     }
-    console.warn("Request submission failed with status:", res.status);
+    const errorBody = await res.json().catch(() => null);
+    return {
+      success: false,
+      message: errorBody?.error?.message || `Request submission failed (${res.status})`,
+    };
   } catch (err) {
-    console.warn("Backend request submission offline, falling back:", err.message);
+    console.warn("Backend request submission unavailable:", err.message);
+    return {
+      success: false,
+      message: "The request service is unavailable. Keep this form open and try again.",
+    };
   }
-  return delay({ success: true, requestId: payload.requestId || "ENG-2026-0099" });
 }
 
 export async function updateRequestStatus(requestId, status, decision = "APPROVED", feedback = "", alternativeId = null, prohibitedWindow = null) {
@@ -159,17 +192,34 @@ export async function updateRequestStatus(requestId, status, decision = "APPROVE
 
 // ---- Railway Tracks & Train Information API ----
 
-// Returns the full GeoJSON FeatureCollection from the backend
+const LOCAL_TRACKS_URL = "/railway_tracks.geojson";
+
+function isTrackFeatureCollection(data) {
+  return data?.type === "FeatureCollection" && Array.isArray(data.features) && data.features.length > 0;
+}
+
+// Returns the full GeoJSON FeatureCollection. The checked-in snapshot keeps the
+// map usable when the API service is not running (for example in a frontend-only demo).
 export async function fetchTracks() {
   try {
     const res = await fetch(`${BASE_URL}/tracks`);
     if (res.ok) {
-      return await res.json(); // GeoJSON FeatureCollection
+      const data = await res.json();
+      if (isTrackFeatureCollection(data)) return data;
     }
   } catch (err) {
-    console.warn("Backend tracks offline:", err.message);
+    console.warn("Backend tracks offline, using local railway snapshot:", err.message);
   }
-  return null;
+
+  const fallbackResponse = await fetch(LOCAL_TRACKS_URL);
+  if (!fallbackResponse.ok) {
+    throw new Error(`Railway snapshot unavailable (${fallbackResponse.status})`);
+  }
+  const fallbackData = await fallbackResponse.json();
+  if (!isTrackFeatureCollection(fallbackData)) {
+    throw new Error("Railway snapshot contains no track segments");
+  }
+  return fallbackData;
 }
 
 // Returns train schedules for a specific track segment
@@ -199,7 +249,7 @@ export async function fetchTrackTraffic(trackId) {
   return {
     trackId,
     scheduledTrains: [
-      { train_no: "12627", train_name: "Karnataka Express", train_type: "SUPERFAST", source: "SBC Bengaluru", destination: "NDLS New Delhi", priority: 95 },
+      { train_no: "12627", train_name: "India Express", train_type: "SUPERFAST", source: "SBC Bengaluru", destination: "NDLS New Delhi", priority: 95 },
       { train_no: "G-BOXN-401", train_name: "Iron Ore Freight Special", train_type: "GOODS", source: "BAY Ballari", destination: "MAQ Mangaluru", priority: 40 },
     ],
     routeSegments: [
@@ -224,7 +274,7 @@ export async function checkConflict(payload) {
   } catch (err) {
     console.warn("Backend conflict check offline:", err.message);
   }
-  return { safe: false, conflicts: [{ trainNo: "12627", trainName: "Karnataka Express", arrival: "19:15", departure: "19:22" }] };
+  return { safe: false, conflicts: [{ trainNo: "12627", trainName: "India Express", arrival: "19:15", departure: "19:22" }] };
 }
 
 export async function fetchAgentPlan(payload) {
@@ -373,4 +423,3 @@ export function fetchRecentActivity() { return delay(mockActivity); }
 export function fetchUsers() { return delay(mockUsers); }
 export function createUser(form) { return delay({ success: true }); }
 export function deleteUser(username) { return delay({ success: true }); }
-

@@ -10,7 +10,7 @@ export default function DeptStatsCard({ departments }) {
             <span className="w-32 text-sm text-gray-600 shrink-0">{d.name}</span>
             <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
               <div
-                className="bg-green-600 h-full rounded-full"
+                className="h-full rounded-full bg-[#171918]"
                 style={{ width: `${(d.count / d.max) * 100}%` }}
               />
             </div>

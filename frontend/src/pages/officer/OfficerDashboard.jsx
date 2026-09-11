@@ -1,28 +1,23 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Clock,
   CheckCircle2,
   Settings,
-  CalendarDays,
-  ArrowRight,
 } from "lucide-react";
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
-import Table from "../../components/common/Table";
-import Button from "../../components/common/Button";
+import OperationsOverview from "../../components/common/OperationsOverview";
 import { fetchDashboardStats, fetchUpcomingMaintenance } from "../../utils/api";
 
 const statMeta = {
-  total: { icon: FileText, bg: "bg-green-100", iconColor: "text-green-700" },
+  total: { icon: FileText, bg: "bg-red-50", iconColor: "text-[#cf432c]" },
   pending: { icon: Clock, bg: "bg-amber-100", iconColor: "text-amber-600" },
   approved: { icon: CheckCircle2, bg: "bg-green-100", iconColor: "text-green-700" },
-  active: { icon: Settings, bg: "bg-green-100", iconColor: "text-green-700" },
+  active: { icon: Settings, bg: "bg-gray-100", iconColor: "text-gray-700" },
 };
 
 export default function OfficerDashboard() {
-  const navigate = useNavigate();
   const [stats, setStats] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
 
@@ -49,70 +44,28 @@ export default function OfficerDashboard() {
     { key: "description", header: "Description" },
   ];
 
+  const getMetricRoute = (key) => {
+    if (key === "approved") return "/officer/approved-requests";
+    if (key === "pending") return "/officer/requests";
+    return null;
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       <Navbar />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-8">
-          <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
-          <p className="text-gray-500 mb-6">Maintenance Request Overview</p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            {stats.map(({ key, label, value }) => {
-              const meta = statMeta[key] || statMeta.total;
-              const Icon = meta.icon;
-              const getTargetRoute = (k) => {
-                if (k === "approved") return "/officer/approved-requests";
-                if (k === "pending") return "/officer/requests";
-                return null;
-              };
-              const targetRoute = getTargetRoute(key);
-
-              return (
-                <div
-                  key={key}
-                  onClick={() => targetRoute && navigate(targetRoute)}
-                  className={`bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 transition-all ${
-                    targetRoute ? "hover:border-green-300 hover:shadow-md cursor-pointer" : ""
-                  }`}
-                >
-                  <div className={`${meta.bg} rounded-lg p-3`}>
-                    <Icon className={meta.iconColor} size={26} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">{label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{value}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-start justify-between mb-5">
-              <div className="flex items-start gap-3">
-                <CalendarDays className="text-green-800 mt-1" size={24} />
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Upcoming Maintenance</h3>
-                  <p className="text-sm text-gray-500">
-                    Scheduled maintenance tasks across all departments.
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                icon={ArrowRight}
-                className="text-sm px-4 py-2"
-                onClick={() => navigate("/officer/calendar")}
-              >
-                View Calendar
-              </Button>
-            </div>
-
-            <Table columns={columns} rows={upcoming} rowKey="requestId" />
-          </div>
-        </main>
+        <OperationsOverview
+          eyebrow="Officer control"
+          title="Operations overview"
+          subtitle="Maintenance requests and upcoming possession windows across the network."
+          stats={stats}
+          statMeta={statMeta}
+          upcoming={upcoming}
+          columns={columns}
+          calendarPath="/officer/calendar"
+          getMetricRoute={getMetricRoute}
+        />
       </div>
     </div>
   );

@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --rail-ink: #171918;
+    --rail-muted: #68706b;
+    --rail-canvas: #f4f6f5;
+    --rail-line: #e3e5e4;
+    --rail-red: #cf432c;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: var(--rail-canvas);
+    color: var(--rail-ink);
+    font-family:
+      "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  #root {
+    min-height: 100svh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.025em;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    accent-color: var(--rail-red);
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: #f7d5cf;
+    color: #8f2c1f;
+  }
+}
+
+/* A restrained surface treatment keeps every authenticated page in the same
+   visual family without changing its structure or behaviour. */
+main .rounded-2xl.bg-white {
+  border-color: var(--rail-line);
+  border-radius: 0.75rem;
+  box-shadow: none;
+}

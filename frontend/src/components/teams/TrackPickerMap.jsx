@@ -1,25 +1,40 @@
 // frontend/src/components/teams/TrackPickerMap.jsx
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState, useMemo } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
-import { MapPin, Search, CheckCircle2, X, Train, RefreshCw, Compass, Plus } from "lucide-react";
+import { MapContainer, TileLayer, GeoJSON, ZoomControl, useMap } from "react-leaflet";
+import {
+  Search,
+  CheckCircle2,
+  X,
+  Train,
+  RefreshCw,
+  Compass,
+  Plus,
+  ArrowRight,
+} from "lucide-react";
+import { fetchTracks } from "../../utils/api";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-
-// Pans smoothly to a target track (only when explicitly searched or hub clicked) WITHOUT zooming out
-function MapPanController({ panTarget }) {
+function MapLifecycle({ active, panTarget }) {
   const map = useMap();
-  useEffect(() => {
-    if (!panTarget || !panTarget.coords) return;
-    const coords = panTarget.coords;
-    if (!coords || coords.length === 0) return;
 
+  useEffect(() => {
+    if (!active) return;
+    const frame = requestAnimationFrame(() => map.invalidateSize());
+    const onResize = () => map.invalidateSize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [active, map]);
+
+  useEffect(() => {
+    if (!panTarget?.coords?.length) return;
     try {
+      const coords = panTarget.coords;
       const midIdx = Math.floor(coords.length / 2);
       const center = [coords[midIdx][1], coords[midIdx][0]];
-      // Keep current zoom if already zoomed in, or zoom in to at least 14 — NEVER zoom out!
-      const currentZoom = map.getZoom();
-      const targetZoom = Math.max(currentZoom, 14);
+      const targetZoom = Math.max(map.getZoom(), 14);
       map.setView(center, targetZoom, { animate: true });
     } catch (e) {
       console.warn("Could not pan to track:", e);
@@ -29,7 +44,6 @@ function MapPanController({ panTarget }) {
   return null;
 }
 
-// Quick presets for major Karnataka railway junctions
 const QUICK_HUBS = [
   { label: "Hubballi", trackId: "KA-T-000342" },
   { label: "Bengaluru", trackId: "KA-T-000120" },
@@ -37,60 +51,71 @@ const QUICK_HUBS = [
   { label: "Ballari", trackId: "KA-T-000450" },
 ];
 
-export default function TrackPickerMap({ selectedTrackIds = [], onToggleTrack, onClearAll }) {
+export default function TrackPickerMap({
+  selectedTrackIds = [],
+  onToggleTrack,
+  onClearAll,
+  onContinue,
+  continueError,
+  active = true,
+}) {
   const [tracks, setTracks] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMsg, setSearchMsg] = useState("");
   const [panTarget, setPanTarget] = useState(null);
   const geoJsonRef = useRef(null);
+  const searchRef = useRef(null);
 
-  // Fetch track GeoJSON from backend
   useEffect(() => {
     let isMounted = true;
-    fetch(`${BASE_URL}/tracks`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load tracks");
-        return res.json();
-      })
+    fetchTracks()
       .then((data) => {
-        if (isMounted) {
-          setTracks(data);
-          setLoading(false);
-        }
+        if (!isMounted) return;
+        setTracks(data);
+        setLoading(false);
       })
       .catch((err) => {
         console.error("Error loading tracks for picker:", err);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setTracks(null);
+          setLoadError("Railway tracks could not be loaded.");
+          setLoading(false);
+        }
       });
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadAttempt]);
 
-  // Quick lookup set for fast styling
-  const selectedSet = useMemo(() => new Set(selectedTrackIds.map((id) => id.toUpperCase())), [selectedTrackIds]);
-
-  // Re-style map layers whenever selectedTrackIds changes
   useEffect(() => {
-    if (geoJsonRef.current) {
-      geoJsonRef.current.eachLayer((l) => {
-        const tid = l.feature?.properties?.track_id?.toUpperCase();
-        const isSelected = tid && selectedSet.has(tid);
-        l.setStyle({
-          color: isSelected ? "#059669" : "#2563eb",
-          weight: isSelected ? 7 : 3,
-          opacity: isSelected ? 1 : 0.7,
-        });
+    if (active) searchRef.current?.focus();
+  }, [active]);
+
+  const selectedSet = useMemo(
+    () => new Set(selectedTrackIds.map((id) => id.toUpperCase())),
+    [selectedTrackIds]
+  );
+  const selectedCount = selectedTrackIds.length;
+
+  useEffect(() => {
+    if (!geoJsonRef.current) return;
+    geoJsonRef.current.eachLayer((l) => {
+      const tid = l.feature?.properties?.track_id?.toUpperCase();
+      const isSelected = tid && selectedSet.has(tid);
+      l.setStyle({
+        color: isSelected ? "#059669" : "#2563eb",
+        weight: isSelected ? 7 : 3,
+        opacity: isSelected ? 1 : 0.7,
       });
-    }
+    });
   }, [selectedSet]);
 
-  // Toggle track selection (from map click: never changes zoom or camera)
   const handleToggle = (trackId, feature) => {
     if (!trackId) return;
-    const normId = trackId.toUpperCase();
-    onToggleTrack?.(normId, feature);
+    onToggleTrack?.(trackId.toUpperCase(), feature);
     setSearchMsg("");
   };
 
@@ -102,18 +127,17 @@ export default function TrackPickerMap({ selectedTrackIds = [], onToggleTrack, o
     );
     if (found) {
       const tid = found.properties.track_id;
-      // Pan to the track without zooming out
       if (found.geometry?.coordinates) {
         setPanTarget({ coords: found.geometry.coordinates, trackId: tid });
       }
       if (!selectedSet.has(tid.toUpperCase())) {
         handleToggle(tid, found);
-        setSearchMsg(`Added segment ${tid} to selection`);
+        setSearchMsg(`Added ${tid}`);
       } else {
-        setSearchMsg(`Segment ${tid} is already selected`);
+        setSearchMsg(`${tid} is already in possession`);
       }
     } else {
-      setSearchMsg(`Track "${searchQuery}" not found. Select from the map directly.`);
+      setSearchMsg(`Track “${searchQuery}” not found. Click a line on the map.`);
     }
   };
 
@@ -129,7 +153,7 @@ export default function TrackPickerMap({ selectedTrackIds = [], onToggleTrack, o
 
   const onEachTrack = (feature, layer) => {
     const tid = feature.properties?.track_id || "Track";
-    layer.bindTooltip(`<strong>${tid}</strong><br/>Click to toggle selection`, {
+    layer.bindTooltip(`<strong>${tid}</strong><br/>Click to add or remove`, {
       sticky: true,
       className: "track-tooltip",
     });
@@ -137,8 +161,7 @@ export default function TrackPickerMap({ selectedTrackIds = [], onToggleTrack, o
     layer.on({
       click: () => handleToggle(tid, feature),
       mouseover: (e) => {
-        const isSelected = selectedSet.has(tid.toUpperCase());
-        if (!isSelected) {
+        if (!selectedSet.has(tid.toUpperCase())) {
           e.target.setStyle({ weight: 5, color: "#10b981", opacity: 0.9 });
         }
       },
@@ -154,164 +177,245 @@ export default function TrackPickerMap({ selectedTrackIds = [], onToggleTrack, o
   };
 
   return (
-    <div className="space-y-3">
-      {/* Top Search & Presets Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
-        <div className="flex-1 flex gap-2">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search Track ID (e.g. KA-T-000342)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSearchSubmit(); } }}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 bg-white"
-            />
+    <div className="absolute inset-0 bg-slate-950">
+      {loading ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-300">
+          <RefreshCw size={28} className="animate-spin text-emerald-400" />
+          <p className="text-sm font-medium tracking-wide">
+            Loading India railway segments…
+          </p>
+        </div>
+      ) : loadError ? (
+        <div className="flex h-full flex-col items-center justify-center gap-4 bg-[#f4f6f5] px-6 text-center">
+          <div className="grid size-12 place-items-center rounded-full bg-red-50 text-[#cf432c]">
+            <Train size={22} />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-950">Track layer unavailable</p>
+            <p className="mt-1 text-sm text-slate-500">The base map is ready, but the railway data did not load.</p>
           </div>
           <button
             type="button"
-            onClick={handleSearchSubmit}
-            className="px-3 py-2 bg-green-800 text-white rounded-lg text-sm font-medium hover:bg-green-900 transition-colors cursor-pointer"
+            onClick={() => {
+              setLoading(true);
+              setLoadError("");
+              setLoadAttempt((attempt) => attempt + 1);
+            }}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#171918] px-4 py-2 text-sm font-semibold text-white hover:bg-black"
           >
-            Add
+            <RefreshCw size={16} /> Retry track layer
           </button>
         </div>
+      ) : (
+        <div className="absolute inset-0">
+          <MapContainer
+            center={[15.3173, 75.7139]}
+            zoom={7}
+            minZoom={6}
+            zoomControl={false}
+            attributionControl={false}
+            style={{ height: "100%", width: "100%" }}
+            className="[&_.leaflet-bottom]:!bottom-36"
+            scrollWheelZoom={true}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <ZoomControl position="bottomright" />
+            {tracks?.features?.length > 0 && (
+              <GeoJSON
+                ref={geoJsonRef}
+                data={tracks}
+                style={trackStyle}
+                onEachFeature={onEachTrack}
+              />
+            )}
+            <MapLifecycle active={active} panTarget={panTarget} />
+          </MapContainer>
+        </div>
+      )}
 
-        {/* Quick Hub Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto text-xs py-1">
-          <span className="text-gray-400 font-medium whitespace-nowrap flex items-center gap-1">
-            <Compass size={12} /> Hubs:
-          </span>
-          {QUICK_HUBS.map((hub) => {
-            const isSelected = selectedSet.has(hub.trackId.toUpperCase());
-            return (
+      <div className="pointer-events-none absolute inset-0 z-[1100] flex flex-col justify-between p-3 sm:p-4 md:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="pointer-events-auto max-w-xl rounded-2xl bg-white/92 px-4 py-3 shadow-[0_12px_40px_rgb(15_23_42/0.18)] ring-1 ring-black/8 backdrop-blur-md">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#b83825]">
+              Step 1 of 2 · Claim the corridor
+            </p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">
+              Which tracks leave traffic?
+            </h2>
+            <p className="mt-1 max-w-md text-sm leading-relaxed text-slate-600">
+              Click every segment that must be taken out of service. The map is the request — details come next.
+            </p>
+          </div>
+
+          <div className="pointer-events-auto flex min-w-0 flex-1 flex-col gap-2 lg:max-w-xl lg:items-end">
+            <div className="flex w-full gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  aria-label="Search track ID"
+                  placeholder="Jump to a track ID"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSearchSubmit();
+                    }
+                  }}
+                  className="w-full rounded-xl border-0 bg-white/92 py-2.5 pr-3 pl-9 text-sm text-slate-900 shadow-[0_12px_40px_rgb(15_23_42/0.18)] ring-1 ring-black/8 backdrop-blur-md placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#cf432c]"
+                />
+              </div>
               <button
-                key={hub.trackId}
                 type="button"
-                onClick={() => {
-                  const found = tracks?.features?.find(
-                    (f) => f.properties?.track_id === hub.trackId
-                  );
-                  if (found?.geometry?.coordinates) {
-                    setPanTarget({ coords: found.geometry.coordinates, trackId: hub.trackId });
-                  }
-                  handleToggle(hub.trackId, found);
-                }}
-                className={`px-2.5 py-1 rounded-md whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 ${
-                  isSelected
-                    ? "bg-green-800 text-white font-semibold shadow-xs"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                onClick={handleSearchSubmit}
+                className="rounded-xl bg-[#171918] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(20_83_45/0.28)] transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
+              >
+                Add
+              </button>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-1.5 lg:justify-end">
+              <span className="flex items-center gap-1 text-[11px] font-medium text-white/90 drop-shadow-sm">
+                <Compass size={12} /> Jump
+              </span>
+              {QUICK_HUBS.map((hub) => {
+                const isSelected = selectedSet.has(hub.trackId.toUpperCase());
+                return (
+                  <button
+                    key={hub.trackId}
+                    type="button"
+                    onClick={() => {
+                      const found = tracks?.features?.find(
+                        (f) => f.properties?.track_id === hub.trackId
+                      );
+                      if (found?.geometry?.coordinates) {
+                        setPanTarget({ coords: found.geometry.coordinates, trackId: hub.trackId });
+                      }
+                      handleToggle(hub.trackId, found);
+                    }}
+                    className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
+                      isSelected
+                        ? "bg-[#171918] font-semibold text-white shadow-xs"
+                        : "bg-white/92 text-slate-700 ring-1 ring-black/8 backdrop-blur-md hover:bg-white"
+                    }`}
+                  >
+                    {isSelected ? <CheckCircle2 size={12} /> : <Plus size={12} />}
+                    {hub.label}
+                  </button>
+                );
+              })}
+            </div>
+            {searchMsg && (
+              <p
+                className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium lg:text-right ${
+                  searchMsg.startsWith("Added")
+                    ? "bg-emerald-950/80 text-emerald-100"
+                    : "bg-amber-950/80 text-amber-100"
                 }`}
               >
-                {isSelected ? <CheckCircle2 size={12} /> : <Plus size={12} />}
-                {hub.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {searchMsg && (
-        <p className={`text-xs ${searchMsg.includes("Added") ? "text-green-700 font-medium" : "text-amber-700"}`}>
-          {searchMsg}
-        </p>
-      )}
-
-      {/* Embedded Map Container */}
-      <div className="relative border-2 border-dashed border-gray-200 rounded-xl overflow-hidden shadow-inner bg-slate-50">
-        {loading ? (
-          <div className="h-64 flex flex-col items-center justify-center gap-2 text-gray-500">
-            <RefreshCw size={24} className="animate-spin text-green-800" />
-            <span className="text-xs font-medium">Loading 5,461 Karnataka railway track segments...</span>
+                {searchMsg}
+              </p>
+            )}
           </div>
-        ) : (
-          <div className="h-72 w-full">
-            <MapContainer
-              center={[15.3173, 75.7139]}
-              zoom={7}
-              style={{ height: "100%", width: "100%" }}
-              scrollWheelZoom={true}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              {tracks && (
-                <GeoJSON
-                  ref={geoJsonRef}
-                  data={tracks}
-                  style={trackStyle}
-                  onEachFeature={onEachTrack}
-                />
-              )}
-
-              {panTarget && <MapPanController panTarget={panTarget} />}
-            </MapContainer>
-          </div>
-        )}
-
-        {/* Floating Instructions Helper */}
-        <div className="absolute bottom-2 left-2 z-[400] bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-md text-[11px] text-gray-600 shadow-sm border border-gray-200 flex items-center gap-1.5 pointer-events-none">
-          <MapPin size={12} className="text-green-800" />
-          <span>Click multiple blue track lines to add/remove them from block possession</span>
         </div>
-      </div>
 
-      {/* Selected Track Segments Multi-Badge Card */}
-      {selectedTrackIds.length > 0 ? (
-        <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3.5 text-emerald-900 shadow-xs space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
-                {selectedTrackIds.length}
+        <div className="pointer-events-auto mx-auto w-full max-w-5xl">
+          <div
+            className={`rounded-2xl p-3 shadow-[0_16px_48px_rgb(15_23_42/0.28)] ring-1 backdrop-blur-md sm:p-4 ${
+              selectedCount
+                ? "bg-white/94 ring-emerald-700/20"
+                : "bg-slate-950/82 ring-white/10"
+            }`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex size-8 items-center justify-center rounded-full text-sm font-bold ${
+                      selectedCount
+                        ? "bg-[#171918] text-white"
+                        : "bg-white/15 text-white"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {selectedCount}
+                  </span>
+                  <div>
+                    <p
+                      className={`text-sm font-semibold ${
+                        selectedCount ? "text-slate-950" : "text-white"
+                      }`}
+                    >
+                      {selectedCount === 0
+                        ? "No corridor claimed yet"
+                        : selectedCount === 1
+                          ? "1 segment in possession"
+                          : `${selectedCount} segments in possession`}
+                    </p>
+                    <p className={`text-[10px] ${selectedCount ? "text-slate-400" : "text-white/45"}`}>
+                      Map data © OpenStreetMap
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        selectedCount ? "text-slate-500" : "text-white/70"
+                      }`}
+                    >
+                      {selectedCount
+                        ? "These lines become one unified block sanction."
+                        : "Click a blue track. Click again to release it."}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedCount > 0 && (
+                  <div className="mt-2.5 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                    {selectedTrackIds.map((tid) => (
+                      <span
+                        key={tid}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1 font-mono text-xs font-bold text-emerald-900"
+                      >
+                        <Train size={12} className="text-emerald-700" />
+                        {tid}
+                        <button
+                          type="button"
+                          onClick={() => handleToggle(tid, null)}
+                          aria-label={`Remove ${tid}`}
+                          className="ml-0.5 inline-flex size-7 items-center justify-center rounded-md text-slate-400 transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-red-600 active:scale-[0.96]"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={onClearAll}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
               </div>
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                {selectedTrackIds.length === 1 ? "1 Track Segment Selected" : `${selectedTrackIds.length} Track Segments Selected`}
-              </span>
-            </div>
 
-            <button
-              type="button"
-              onClick={onClearAll}
-              className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 px-2 py-1 rounded transition-colors cursor-pointer"
-            >
-              Clear All
-            </button>
-          </div>
-
-          {/* List of segment chips */}
-          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-            {selectedTrackIds.map((tid) => (
-              <span
-                key={tid}
-                className="inline-flex items-center gap-1 text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-lg border border-emerald-200 text-emerald-900 shadow-2xs"
-              >
-                <Train size={12} className="text-emerald-700" />
-                {tid}
+              <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
+                {continueError && (
+                  <p className="text-xs font-medium text-red-300">{continueError}</p>
+                )}
                 <button
                   type="button"
-                  onClick={() => handleToggle(tid, null)}
-                  className="text-gray-400 hover:text-red-600 ml-1 rounded-full p-0.5 transition-colors cursor-pointer"
-                  title={`Remove ${tid}`}
+                  onClick={onContinue}
+                  disabled={selectedCount === 0}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#171918] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgb(20_83_45/0.32)] transition-[background-color,transform,opacity] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
                 >
-                  <X size={12} />
+                  Next · specify the work
+                  <ArrowRight size={16} />
                 </button>
-              </span>
-            ))}
+              </div>
+            </div>
           </div>
-
-          <p className="text-[11px] text-emerald-700">
-            All {selectedTrackIds.length} segments will be included in the unified multi-track block sanction.
-          </p>
         </div>
-      ) : (
-        <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
-          <MapPin size={14} className="shrink-0" />
-          <span>No track segments selected yet. Click one or more tracks on the map to add them to your request.</span>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

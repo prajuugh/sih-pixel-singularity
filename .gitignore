@@ -2,6 +2,7 @@
 node_modules/
 */node_modules/
 **/node_modules/
+design-plans/
 
 # Python cache & virtual environments
 __pycache__/
@@ -24,6 +25,8 @@ frontend/.env
 dist/
 build/
 *.log
+backend/data/runtime-store.json
+backend/data/runtime-store.json.tmp
 
 # OS files
 .DS_Store

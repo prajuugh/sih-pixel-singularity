@@ -1,6 +1,7 @@
 // backend/src/services/request.service.js
 const { fallbackStore } = require("../config/database");
 const { callPythonAgentService } = require("./agent.service");
+const { persistLocalStore } = require("./local-store.service");
 
 async function enrichRequestWithAgentPlan(req) {
   if (req.agent_plan && req.alternatives && req.alternatives.length > 0) {
@@ -59,6 +60,8 @@ async function enrichRequestWithAgentPlan(req) {
     console.warn(`Could not enrich request ${req.request_id} with agent plan:`, err.message);
   }
 
+  persistLocalStore(fallbackStore);
+
   return req;
 }
 
@@ -66,7 +69,10 @@ async function createRequest(userId, payload) {
   const reqCount = fallbackStore.maintenance_requests.length + 1;
   const dept = payload.department || "Engineering";
   const deptCode = dept.substring(0, 3).toUpperCase();
-  const requestId = `${deptCode}-2026-${String(reqCount).padStart(5, "0")}`;
+  const preferredId = payload.requestId || payload.request_id;
+  const generatedId = `${deptCode}-2026-${String(reqCount).padStart(5, "0")}`;
+  const preferredTaken = preferredId && fallbackStore.maintenance_requests.some((r) => r.request_id === preferredId);
+  const requestId = preferredId && !preferredTaken ? preferredId : generatedId;
 
   const fromDate = payload.fromDate || payload.from_date || payload.requested_date || new Date().toISOString().split("T")[0];
   const toDate = payload.toDate || payload.to_date || fromDate;
@@ -174,6 +180,8 @@ async function createRequest(userId, payload) {
       });
     }
   }
+
+  persistLocalStore(fallbackStore);
 
   return newRequest;
 }
@@ -306,6 +314,8 @@ async function reviewRequest(requestId, officerId, decision, feedback, alternati
     },
     timestamp: new Date().toISOString(),
   });
+
+  persistLocalStore(fallbackStore);
 
   return { request: req, review };
 }

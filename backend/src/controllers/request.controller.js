@@ -1,6 +1,7 @@
 // backend/src/controllers/request.controller.js
 const { fallbackStore } = require("../config/database");
 const { createRequest, reviewRequest, enrichRequestWithAgentPlan } = require("../services/request.service");
+const { persistLocalStore } = require("../services/local-store.service");
 
 async function getAllRequests(req, res, next) {
   try {
@@ -89,6 +90,7 @@ async function submitRequest(req, res, next) {
     request.status = "SUBMITTED";
     request.submitted_at = new Date().toISOString();
     request.updated_at = new Date().toISOString();
+    persistLocalStore(fallbackStore);
 
     res.json({
       success: true,

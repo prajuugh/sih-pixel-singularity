@@ -28,35 +28,36 @@ export default function CheckStatus() {
       <Navbar />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-8">
+        <main className="min-w-0 flex-1 p-4 pb-20 md:p-6 md:pb-6 xl:p-8">
           <div className="flex items-center gap-2 mb-1">
-            <Search className="text-green-800" size={22} />
+            <Search className="text-[#b83825]" size={22} />
             <h2 className="text-2xl font-bold text-gray-900">Check Request Status</h2>
           </div>
           <p className="text-gray-500 mb-6">Track your submitted maintenance requests.</p>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
-            <label className="block text-sm font-semibold text-green-800 mb-2">
+          <div className="mb-6 rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
+            <label htmlFor="request-search" className="block text-sm font-semibold text-[#b83825] mb-2">
               Search Request ID
             </label>
             <div className="flex gap-3">
               <input
                 type="text"
+                id="request-search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Enter Request ID (e.g. SMMS-2026-00782)"
-                className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5"
+                className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 transition-[border-color,box-shadow] duration-150 focus:border-[#cf432c] focus:outline-none focus:ring-2 focus:ring-[#cf432c]/15"
               />
               <Button icon={Search}>Search</Button>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-gray-900">Requests</h3>
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 Show
-                <select className="border border-gray-200 rounded px-2 py-1">
+                <select aria-label="Rows per page" className="border border-gray-200 rounded px-2 py-1">
                   <option>10</option>
                   <option>25</option>
                   <option>50</option>
@@ -85,7 +86,8 @@ export default function CheckStatus() {
                         <td className="py-3 px-2">
                           <button
                             onClick={() => setExpandedId(isOpen ? null : r.id)}
-                            className="text-gray-400"
+                            aria-label={`${isOpen ? "Collapse" : "Expand"} request ${r.id}`}
+                            className="inline-flex size-11 items-center justify-center rounded-lg text-gray-400 transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-gray-100 hover:text-gray-700 active:scale-[0.96]"
                           >
                             {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                           </button>
@@ -103,7 +105,7 @@ export default function CheckStatus() {
                         <td className="py-3 px-2">
                           <button
                             onClick={() => setExpandedId(isOpen ? null : r.id)}
-                            className="border border-green-700 text-green-800 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1"
+                            className="flex items-center gap-1 rounded-lg border border-[#cf432c] px-3 py-1.5 text-xs font-semibold text-[#b83825] transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[#fff5f2] active:scale-[0.96]"
                           >
                             View Reason
                             {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -114,7 +116,7 @@ export default function CheckStatus() {
                         <tr className="bg-green-50">
                           <td />
                           <td colSpan={5} className="py-4 px-4">
-                            <p className="font-semibold text-green-800 mb-1">
+                            <p className="font-semibold text-[#b83825] mb-1">
                               Reason for Current Status
                             </p>
                             <p className="text-gray-600 mb-3">{r.reason}</p>
@@ -141,7 +143,7 @@ export default function CheckStatus() {
                                     <Sparkles size={14} className="text-amber-500" />
                                     <span>AI Revised Block Plan:</span>
                                   </div>
-                                  <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded-full border border-green-200">
+                                  <span className="text-[10px] font-bold bg-green-100 text-[#b83825] px-2 py-0.5 rounded-full border border-green-200">
                                     Zero Train Conflict Slot
                                   </span>
                                 </div>
@@ -164,7 +166,7 @@ export default function CheckStatus() {
                                     </div>
                                   )}
                                   <div className="bg-green-100 p-2 rounded-lg border border-green-300">
-                                    <span className="text-[10px] text-green-800 font-bold block uppercase flex items-center gap-1">
+                                    <span className="text-[10px] text-[#b83825] font-bold block uppercase flex items-center gap-1">
                                       <Clock size={10} className="text-green-700" /> Revised Block Window
                                     </span>
                                     <span className="font-mono text-green-950 font-black text-sm">
@@ -174,7 +176,7 @@ export default function CheckStatus() {
                                 </div>
 
                                 {r.aiExplanation && (
-                                  <div className="text-[11px] text-green-900 bg-green-50/70 p-2.5 rounded-lg border border-green-200 flex items-start gap-2">
+                                  <div className="text-[11px] text-[#8f2c1f] bg-green-50/70 p-2.5 rounded-lg border border-green-200 flex items-start gap-2">
                                     <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
                                     <span>{r.aiExplanation}</span>
                                   </div>
@@ -195,9 +197,9 @@ export default function CheckStatus() {
                 Showing 1 to {filtered.length} of {requests.length} entries
               </p>
               <div className="flex items-center gap-1">
-                <button className="px-2 py-1 rounded hover:bg-gray-50">Previous</button>
-                <button className="w-7 h-7 rounded bg-green-800 text-white">1</button>
-                <button className="px-2 py-1 rounded hover:bg-gray-50">Next</button>
+                <button className="rounded-lg px-3 py-2 transition-[background-color,transform] duration-150 hover:bg-gray-100 active:scale-[0.96]">Previous</button>
+                <button className="size-8 rounded-lg bg-[#171918] text-white transition-transform duration-150 active:scale-[0.96]">1</button>
+                <button className="rounded-lg px-3 py-2 transition-[background-color,transform] duration-150 hover:bg-gray-100 active:scale-[0.96]">Next</button>
               </div>
             </div>
           </div>

@@ -96,12 +96,12 @@ export default function ApprovedRequests() {
       <Navbar />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6 xl:p-8">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center text-green-800">
+                <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center text-[#b83825]">
                   <CheckCircle2 size={22} />
                 </div>
                 <div>
@@ -109,7 +109,7 @@ export default function ApprovedRequests() {
                     Approved Maintenance Requests & Possessions
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Authorized corridor possessions across Karnataka railway network (both initial schedules and AI-modified alternatives).
+                    Authorized corridor possessions across India railway network (both initial schedules and AI-modified alternatives).
                   </p>
                 </div>
               </div>
@@ -118,14 +118,14 @@ export default function ApprovedRequests() {
             <div className="flex items-center gap-2">
               <Link
                 to="/officer/requests"
-                className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 hover:text-green-800 hover:border-green-300 text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-2xs"
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-2xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:border-green-300 hover:text-[#b83825] active:scale-[0.96]"
               >
                 <span>Pending Review Queue</span>
               </Link>
               <button
                 onClick={loadRequests}
                 disabled={loading}
-                className="flex items-center gap-1.5 bg-green-800 hover:bg-green-900 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm cursor-pointer"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#171918] px-4 py-2 text-xs font-semibold text-white shadow-sm transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
               >
                 <RotateCw size={14} className={loading ? "animate-spin" : ""} />
                 <span>Refresh</span>
@@ -138,7 +138,7 @@ export default function ApprovedRequests() {
             <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-2xs">
               <span className="text-xs text-gray-500 font-medium">Total Approved Possessions</span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-bold text-green-800">{approvedList.length}</span>
+                <span className="text-2xl font-bold text-[#b83825]">{approvedList.length}</span>
                 <span className="text-[11px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full font-medium">Active</span>
               </div>
             </div>
@@ -162,10 +162,11 @@ export default function ApprovedRequests() {
               <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
               <input
                 type="text"
+                aria-label="Search approved requests"
                 placeholder="Search by Request ID, Track ID (e.g. KA-T-000342), or Department..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#cf432c]"
               />
             </div>
 
@@ -173,9 +174,10 @@ export default function ApprovedRequests() {
               <Filter size={14} className="text-gray-400" />
               <span className="text-xs text-gray-500 font-medium">Department:</span>
               <select
+                aria-label="Filter by department"
                 value={deptFilter}
                 onChange={(e) => setDeptFilter(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-600 bg-white"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#cf432c] bg-white"
               >
                 <option value="ALL">All Departments</option>
                 <option value="Eng">Engineering</option>
@@ -207,7 +209,7 @@ export default function ApprovedRequests() {
                 return (
                   <div
                     key={req.id}
-                    className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs hover:border-green-300 transition-all flex flex-col justify-between"
+                    className="flex flex-col justify-between rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.06] transition-[box-shadow] duration-150 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_12px_28px_rgb(0_0_0/0.08)]"
                   >
                     <div>
                       {/* Top Bar */}
@@ -219,12 +221,13 @@ export default function ApprovedRequests() {
                             </span>
                             <button
                               onClick={() => handleCopy(req.id)}
-                              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                              aria-label={`Copy request ID ${req.id}`}
+                              className="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition-[color,background-color,transform] duration-150 hover:bg-gray-100 hover:text-gray-600 active:scale-[0.96]"
                               title="Copy Request ID"
                             >
                               {copiedId === req.id ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
                             </button>
-                            <span className="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="bg-green-100 text-[#b83825] text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                               <CheckCircle2 size={10} /> APPROVED
                             </span>
                           </div>
@@ -252,7 +255,7 @@ export default function ApprovedRequests() {
 
                       {/* Possession & Allocation Grid */}
                       <div className="grid grid-cols-2 gap-2.5 mb-3.5 text-xs">
-                        <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
                           <span className="text-[11px] text-gray-500 flex items-center gap-1 font-medium mb-0.5">
                             <MapPin size={12} className="text-blue-600" /> Track Possession
                           </span>
@@ -261,7 +264,7 @@ export default function ApprovedRequests() {
                           </p>
                         </div>
 
-                        <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
                           <span className="text-[11px] text-gray-500 flex items-center gap-1 font-medium mb-0.5">
                             <Clock size={12} className="text-purple-600" /> Scheduled Window
                           </span>
@@ -270,7 +273,7 @@ export default function ApprovedRequests() {
                           </p>
                         </div>
 
-                        <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
                           <span className="text-[11px] text-gray-500 flex items-center gap-1 font-medium mb-0.5">
                             <Calendar size={12} className="text-emerald-600" /> Scheduled Date
                           </span>
@@ -279,7 +282,7 @@ export default function ApprovedRequests() {
                           </p>
                         </div>
 
-                        <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
                           <span className="text-[11px] text-gray-500 flex items-center gap-1 font-medium mb-0.5">
                             <Users size={12} className="text-amber-600" /> Allocated Team
                           </span>
@@ -291,7 +294,7 @@ export default function ApprovedRequests() {
 
                       {/* Officer Feedback / Approval Note */}
                       {req.reason && (
-                        <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 text-xs mb-3 text-emerald-900">
+                        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-900">
                           <span className="font-bold text-emerald-950 block mb-0.5 flex items-center gap-1">
                             <CheckCircle2 size={12} /> Officer Approval Note:
                           </span>
@@ -301,7 +304,7 @@ export default function ApprovedRequests() {
 
                       {/* AI Alternative Description if modified */}
                       {req.aiExplanation && (
-                        <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-2.5 text-[11px] text-blue-900 mb-3">
+                        <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/50 p-2.5 text-[11px] text-blue-900">
                           <span className="font-semibold block mb-0.5">Optimization Assessment:</span>
                           <p className="text-blue-800 line-clamp-2">{req.aiExplanation}</p>
                         </div>
@@ -317,7 +320,7 @@ export default function ApprovedRequests() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => navigate(`/officer/live-map`)}
-                          className="bg-green-800 hover:bg-green-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                          className="flex cursor-pointer items-center gap-1 rounded-lg bg-[#171918] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
                         >
                           <MapPin size={12} />
                           <span>View on Live Map</span>
