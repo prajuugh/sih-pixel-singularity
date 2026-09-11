@@ -158,7 +158,7 @@ function formatTime(totalMinutes) {
   return `${h}:${m}`;
 }
 
-const { generateRealWorldTrackSchedule } = require("../services/schedule.service");
+const { generateRealWorldTrackSchedule, getTrackCorridorInfo } = require("../services/schedule.service");
 
 // Generate realistic schedules for ANY track segment across Karnataka
 function getOrGenerateSchedulesForTrack(trackId, requestedDay) {
@@ -214,9 +214,11 @@ async function getTrackSchedule(req, res, next) {
     const requestedDay = req.query.day?.toUpperCase();
 
     const schedules = getOrGenerateSchedulesForTrack(trackId, requestedDay);
+    const corridor = getTrackCorridorInfo(trackId);
 
     res.json({
       trackId,
+      corridor,
       requestedDay: requestedDay || "ALL",
       trainCount: schedules.length,
       schedules,
