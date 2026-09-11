@@ -103,136 +103,154 @@ async function generateSeedData(tracksCount = 5461) {
     });
   }
 
-  // 5. Maintenance Requests (submitted through frontend)
+  // 5. Maintenance Requests (Approved blocks for Officer Live Map)
   const maintenanceRequests = [
     {
-      request_id: "SMMS-2026-00782",
-      created_by: 5,
-      department: "Signal & Telecom",
-      asset_type: "POINT_MACHINE",
-      track_id: "KA-T-000342",
-      task_type: "Point Machine Inspection",
-      description: "Preventive inspection of point machine operation.",
-      requested_date: "2026-09-11",
-      preferred_start_time: "01:00",
-      preferred_end_time: "02:30",
-      estimated_duration_minutes: 90,
-      required_block: true,
-      status: "SUBMITTED",
-      officer_feedback: "Request is under AI conflict evaluation.",
-      submitted_at: "2026-09-10T14:32:00Z",
-    },
-    {
-      request_id: "TMS-2026-00124",
-      created_by: 4,
+      id: 1,
+      request_id: "ENG-2026-00001",
+      created_by: 3,
       department: "Engineering",
       asset_type: "TRACK",
-      track_id: "KA-T-000100",
-      task_type: "Rail Grinding",
-      description: "Track surface grinding for defect removal.",
-      requested_date: "2026-09-12",
-      preferred_start_time: "10:30",
-      preferred_end_time: "12:30",
-      estimated_duration_minutes: 120,
-      required_block: true,
-      status: "UNDER_REVIEW",
-      officer_feedback: "Pending sign-off from officer on duty.",
-      submitted_at: "2026-09-09T09:10:00Z",
-    },
-    {
-      request_id: "TMS-2026-00128",
-      created_by: 4,
-      department: "Engineering",
-      asset_type: "TRACK",
+      asset_condition: "Good",
       track_id: "KA-T-000342",
-      task_type: "Track Maintenance",
-      description: "Routine track maintenance work.",
-      requested_date: "2026-09-14",
-      preferred_start_time: "23:00",
-      preferred_end_time: "01:00",
+      track_ids: ["KA-T-000342"],
+      task_type: "Track Tamping & Alignment",
+      description: "Ballast packing and dynamic track stabilization",
+      requested_date: "2026-09-15",
+      from_date: "2026-09-15",
+      to_date: "2026-09-15",
+      preferred_start_time: "19:00",
+      preferred_end_time: "21:00",
       estimated_duration_minutes: 120,
       required_block: true,
       status: "APPROVED",
-      officer_feedback: "Approved for night maintenance window.",
-      submitted_at: "2026-09-08T11:00:00Z",
+      priority_score: 85,
+      conflict: false,
+      recommended_block: {
+        date: "2026-09-15",
+        startTime: "19:00",
+        endTime: "21:00",
+        trackId: "KA-T-000342",
+        priorityScore: 85,
+      },
+      officer_feedback: "Approved by Section Engineer for 19:00-21:00 window",
+      officer_id: 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
     {
-      request_id: "SMMS-2026-00098",
-      created_by: 5,
+      id: 2,
+      request_id: "SIG-2026-00002",
+      created_by: 4,
       department: "Signal & Telecom",
       asset_type: "SIGNAL",
-      track_id: "KA-T-000500",
-      task_type: "Signal Cable Replacement",
-      description: "Replacement of damaged signal cables.",
-      requested_date: "2026-09-18",
-      preferred_start_time: "02:00",
-      preferred_end_time: "04:00",
-      estimated_duration_minutes: 120,
-      required_block: true,
-      status: "SUBMITTED",
-      officer_feedback: null,
-      submitted_at: "2026-09-07T11:20:00Z",
-    },
-    {
-      request_id: "TDMS-2026-00131",
-      created_by: 6,
-      department: "Traction Distribution",
-      asset_type: "OHE",
-      track_id: "KA-T-000342",
-      task_type: "OHE Maintenance",
-      description: "Inspection and maintenance of OHE equipment.",
-      requested_date: "2026-09-11",
-      preferred_start_time: "01:15",
-      preferred_end_time: "02:45",
+      asset_condition: "Good",
+      track_id: "KA-T-000100",
+      track_ids: ["KA-T-000100"],
+      task_type: "Point Machine & Interlocking Overhaul",
+      description: "Dual motor point machine alignment & electronic relay testing",
+      requested_date: "2026-09-15",
+      from_date: "2026-09-15",
+      to_date: "2026-09-15",
+      preferred_start_time: "21:00",
+      preferred_end_time: "22:30",
       estimated_duration_minutes: 90,
       required_block: true,
-      status: "SUBMITTED",
-      officer_feedback: "Multi-department candidate for combined block.",
-      submitted_at: "2026-09-10T15:00:00Z",
+      status: "APPROVED",
+      priority_score: 78,
+      conflict: false,
+      recommended_block: {
+        date: "2026-09-15",
+        startTime: "21:00",
+        endTime: "22:30",
+        trackId: "KA-T-000100",
+        priorityScore: 78,
+      },
+      officer_feedback: "Approved by Divisional Signal Officer",
+      officer_id: 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: 3,
+      request_id: "TRD-2026-00003",
+      created_by: 5,
+      department: "Traction Distribution",
+      asset_type: "OHE",
+      asset_condition: "Good",
+      track_id: "KA-T-000550",
+      track_ids: ["KA-T-000550"],
+      task_type: "OHE 25kV Cantilever & Wire Inspection",
+      description: "Overhead catenary inspection and contact wire height calibration",
+      requested_date: "2026-09-15",
+      from_date: "2026-09-15",
+      to_date: "2026-09-15",
+      preferred_start_time: "22:30",
+      preferred_end_time: "00:30",
+      estimated_duration_minutes: 120,
+      required_block: true,
+      status: "APPROVED",
+      priority_score: 92,
+      conflict: false,
+      recommended_block: {
+        date: "2026-09-15",
+        startTime: "22:30",
+        endTime: "00:30",
+        trackId: "KA-T-000550",
+        priorityScore: 92,
+      },
+      officer_feedback: "Approved by Senior Divisional Electrical Engineer",
+      officer_id: 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
   ];
 
-  // 6. Trains (45 trains) & Route Segments (1,600+ route segments)
-  const trainTypes = ["EXPRESS", "SUPERFAST", "PASSENGER", "GOODS", "SPECIAL"];
-  const trains = [
-    { train_no: "12627", train_name: "Karnataka Express", train_type: "SUPERFAST", source: "SBC Bengaluru", destination: "NDLS New Delhi", priority: 95 },
-    { train_no: "12007", train_name: "Shatabdi Express", train_type: "SUPERFAST", source: "MAS Chennai", destination: "MYS Mysuru", priority: 98 },
-    { train_no: "16591", train_name: "Hampi Express", train_type: "EXPRESS", source: "UBL Hubballi", destination: "MYS Mysuru", priority: 80 },
-    { train_no: "12725", train_name: "Siddhaganga Intercity", train_type: "EXPRESS", source: "SBC Bengaluru", destination: "DWR Dharwad", priority: 85 },
-    { train_no: "16589", train_name: "Rani Chennamma Express", train_type: "EXPRESS", source: "SBC Bengaluru", destination: "MRJ Miraj", priority: 88 },
-    { train_no: "16515", train_name: "Karwar Express", train_type: "EXPRESS", source: "YPR Yesvantpur", destination: "KAWR Karwar", priority: 75 },
-    { train_no: "56913", train_name: "Bengaluru - Hubballi Passenger", train_type: "PASSENGER", source: "SBC Bengaluru", destination: "UBL Hubballi", priority: 60 },
-    { train_no: "G-BOXN-401", train_name: "Iron Ore Freight Special", train_type: "GOODS", source: "BAY Ballari", destination: "MAQ Mangaluru", priority: 40 },
-    { train_no: "G-BCN-204", train_name: "Foodgrain Container Express", train_type: "GOODS", source: "UBL Hubballi", destination: "SBC Bengaluru", priority: 45 },
-    { train_no: "G-POL-108", train_name: "Petroleum Tanker rake", train_type: "GOODS", source: "MAQ Mangaluru", destination: "KLBG Kalaburagi", priority: 50 },
-  ];
 
-  // Add more generated trains up to 45
-  for (let i = 11; i <= 45; i++) {
-    const tType = trainTypes[i % trainTypes.length];
-    const isFreight = tType === "GOODS";
-    const tNo = isFreight ? `G-FREIGHT-${100 + i}` : `${12000 + i * 11}`;
-    const tName = isFreight ? `Goods Freight Cargo #${i}` : `Express Passenger #${i}`;
+  // 6. Real-World Trains & Continuous Route Segments
+  const { REAL_WORLD_TRAIN_FLEET } = require("../src/services/schedule.service");
+  const trains = [];
+  const trainMap = new Map();
+
+  for (const t of REAL_WORLD_TRAIN_FLEET) {
+    if (!trainMap.has(t.trainNo)) {
+      trainMap.set(t.trainNo, true);
+      trains.push({
+        train_no: t.trainNo,
+        train_name: t.trainName,
+        train_type: t.type,
+        source: t.source,
+        destination: t.destination,
+        priority: t.priority,
+      });
+    }
+  }
+
+  // Ensure minimum 50 trains for PRD & test suite
+  for (let i = trains.length + 1; i <= 60; i++) {
+    const isFreight = i % 4 === 0;
+    const tNo = isFreight ? `G-FREIGHT-${100 + i}` : `${12100 + i * 13}`;
     trains.push({
       train_no: tNo,
-      train_name: tName,
-      train_type: tType,
+      train_name: isFreight ? `Goods Heavy Freight #${i}` : `Superfast Express #${i}`,
+      train_type: isFreight ? "GOODS" : "EXPRESS",
       source: "SBC Bengaluru",
       destination: "UBL Hubballi",
-      priority: isFreight ? 35 + (i % 20) : 70 + (i % 25),
+      priority: isFreight ? 45 : 82,
     });
   }
 
-  // 1,600+ train_route_segments
+  // 2,500+ train route segments across Karnataka network
   const trainRouteSegments = [];
-  trains.forEach((t) => {
-    // Each train spans ~35 to 40 consecutive track segments
-    const startTrackNum = (parseInt(t.train_no.replace(/\D/g, "") || "100") * 7) % 5000 + 1;
-    for (let seq = 1; seq <= 38; seq++) {
+  trains.forEach((t, tIdx) => {
+    const startTrackNum = (tIdx * 89) % 5000 + 1;
+    const baseHour = (tIdx * 2 + 5) % 24;
+    const spanCount = 42;
+
+    for (let seq = 1; seq <= spanCount; seq++) {
       const trackId = `KA-T-${String(startTrackNum + seq).padStart(6, "0")}`;
-      // Calculate times in HH:MM format
-      const startMinutes = (18 * 60 + seq * 8) % (24 * 60); // Starts around 18:00
-      const endMinutes = (startMinutes + 7) % (24 * 60);
+      const startMinutes = (baseHour * 60 + seq * 6) % 1440;
+      const endMinutes = (startMinutes + (t.train_type === "GOODS" ? 9 : 6)) % 1440;
 
       const arrH = String(Math.floor(startMinutes / 60)).padStart(2, "0");
       const arrM = String(startMinutes % 60).padStart(2, "0");

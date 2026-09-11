@@ -29,7 +29,15 @@ class OrchestratorAgent:
         traffic_data = self.traffic_agent.analyze_traffic(track_id, start_time, end_time)
 
         # Step 3: Block Planner Agent optimization & alternatives
-        plan_result = self.block_planner_agent.generate_plan(maint_data, traffic_data, date)
+        prohibited_start = payload.get("prohibitedStartTime")
+        prohibited_end = payload.get("prohibitedEndTime")
+        plan_result = self.block_planner_agent.generate_plan(
+            maint_data,
+            traffic_data,
+            date,
+            prohibited_start=prohibited_start,
+            prohibited_end=prohibited_end
+        )
         plan_result["requestId"] = payload.get("requestId") or payload.get("taskId")
 
         return plan_result

@@ -1,6 +1,6 @@
 // backend/src/controllers/request.controller.js
 const { fallbackStore } = require("../config/database");
-const { createRequest, reviewRequest } = require("../services/request.service");
+const { createRequest, reviewRequest, enrichRequestWithAgentPlan } = require("../services/request.service");
 
 async function getAllRequests(req, res, next) {
   try {
@@ -12,6 +12,11 @@ async function getAllRequests(req, res, next) {
     }
     if (department) {
       requests = requests.filter((r) => r.department.toLowerCase() === department.toLowerCase());
+    }
+
+    // Ensure all requests are enriched with agent plan data
+    for (const r of requests) {
+      await enrichRequestWithAgentPlan(r);
     }
 
     res.json({
@@ -38,6 +43,7 @@ async function getRequestById(req, res, next) {
       });
     }
 
+    await enrichRequestWithAgentPlan(request);
     const reviews = fallbackStore.request_reviews.filter((rv) => rv.request_id === requestId);
     const alternatives = fallbackStore.planning_alternatives.filter((a) => a.request_id === requestId);
 
@@ -46,7 +52,7 @@ async function getRequestById(req, res, next) {
       data: {
         request,
         reviews,
-        alternatives,
+        alternatives: alternatives.length > 0 ? alternatives : (request.alternatives || []),
       },
     });
   } catch (err) {
@@ -97,7 +103,7 @@ async function postReviewRequest(req, res, next) {
   try {
     const { requestId } = req.params;
     const officerId = req.user ? req.user.id : 2;
-    const { decision, feedback, alternative_id } = req.body;
+    const { decision, feedback, alternative_id, prohibited_window, prohibitedStartTime, prohibitedEndTime } = req.body;
 
     if (!decision || !["APPROVED", "REJECTED", "REVISION_REQUIRED"].includes(decision.toUpperCase())) {
       return res.status(400).json({
@@ -106,7 +112,12 @@ async function postReviewRequest(req, res, next) {
       });
     }
 
-    const result = await reviewRequest(requestId, officerId, decision.toUpperCase(), feedback, alternative_id);
+    const prohibitedWindow = prohibited_window || (prohibitedStartTime && prohibitedEndTime ? {
+      startTime: prohibitedStartTime,
+      endTime: prohibitedEndTime,
+    } : null);
+
+    const result = await reviewRequest(requestId, officerId, decision.toUpperCase(), feedback, alternative_id, prohibitedWindow);
 
     res.json({
       success: true,

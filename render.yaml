@@ -1,0 +1,32 @@
+services:
+  # 1. Python 4-Agent Microservice
+  - type: web
+    name: rbps-agent-service
+    env: python
+    rootDir: backend/agent-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /health
+
+  # 2. Node.js Express REST API Backend
+  - type: web
+    name: rbps-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install --omit=dev
+    startCommand: node src/server.js
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: AGENT_SERVICE_URL
+        fromService:
+          type: web
+          name: rbps-agent-service
+          property: host

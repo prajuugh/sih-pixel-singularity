@@ -71,7 +71,31 @@ async function runTests() {
   assert(reviewRes.request.status === "REVISION_REQUIRED", `State transitioned to REVISION_REQUIRED`);
   assert(reviewRes.request.officer_feedback.includes("Karnataka Express"), `Officer feedback recorded`);
 
-  // Verification 6: Plan Generation & Alternatives (Reschedule, Delay, Reroute)
+  // Verification 6: Prohibited Window & Entire Block Plan Revision
+  console.log("\n--- Executing Officer Prohibited Window & Plan Revision Test ---");
+  const prohibitedReview = await reviewRequest(
+    req.request_id,
+    2,
+    "REVISION_REQUIRED",
+    "Peak passenger traffic - possession strictly prohibited between 18:00 and 22:00.",
+    null,
+    { startTime: "18:00", endTime: "22:00" }
+  );
+  assert(prohibitedReview.request.status === "REVISION_REQUIRED", `Request status is REVISION_REQUIRED after blackout`);
+  assert(Boolean(prohibitedReview.request.prohibited_window), `Prohibited window recorded on request`);
+  assert(prohibitedReview.request.prohibited_window.startTime === "18:00", `Prohibited startTime recorded as 18:00`);
+  assert(prohibitedReview.request.prohibited_window.endTime === "22:00", `Prohibited endTime recorded as 22:00`);
+
+  const revisedBlock = prohibitedReview.request.recommended_block;
+  assert(Boolean(revisedBlock), `Revised recommended block generated`);
+  const [revH] = revisedBlock.startTime.split(":").map(Number);
+  // Must NOT fall within prohibited 18:00 - 22:00
+  const isOutsideProhibited = revH >= 22 || revH < 18;
+  assert(isOutsideProhibited, `Revised block startTime (${revisedBlock.startTime}) is outside prohibited window (18:00-22:00)`);
+  assert(prohibitedReview.request.alternatives.length > 0, `Revised alternatives generated (${prohibitedReview.request.alternatives.length})`);
+  assert(prohibitedReview.request.conflict === false, `Conflict resolved in revised window outside blackout`);
+
+  // Verification 7: Plan Generation & Alternatives (Reschedule, Delay, Reroute)
   console.log("\n--- Executing Planning & Alternatives Test ---");
   const planResult = await generatePlan("2026-09-15", "WEEKLY", 1);
   assert(planResult.blocks.length > 0, `Block plan generated ${planResult.blocks.length} blocks`);

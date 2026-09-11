@@ -46,6 +46,8 @@ class PlanRequest(BaseModel):
     urgency: Optional[int] = None
     failureProbability: Optional[int] = None
     overdueDays: Optional[int] = None
+    prohibitedStartTime: Optional[str] = None
+    prohibitedEndTime: Optional[str] = None
 
 @app.get("/health")
 def health():

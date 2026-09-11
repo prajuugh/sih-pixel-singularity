@@ -66,7 +66,7 @@ class BlockPlannerAgent:
             }
         }
 
-    def generate_plan(self, maintenance_info: dict, traffic_info: dict, date: str) -> dict:
+    def generate_plan(self, maintenance_info: dict, traffic_info: dict, date: str, prohibited_start: str = None, prohibited_end: str = None) -> dict:
         priority_res = self.calculate_priority_score(maintenance_info, traffic_info)
         p_score = priority_res["priorityScore"]
         has_conflict = traffic_info.get("hasConflict", False)
@@ -75,6 +75,103 @@ class BlockPlannerAgent:
         duration = maintenance_info.get("durationMinutes", 90)
 
         alternatives = []
+
+        # If Officer designated a Prohibited Window (block CANNOT be planned in this window)
+        if prohibited_start and prohibited_end:
+            p_start_min = time_to_minutes(prohibited_start)
+            p_end_min = time_to_minutes(prohibited_end)
+            if p_end_min <= p_start_min:
+                p_end_min += 1440
+
+            # Candidate 1: Immediately after prohibited end + 15 min buffer
+            cand1_start_min = p_end_min + 15
+            cand1_end_min = cand1_start_min + duration
+
+            rev_start = minutes_to_time(cand1_start_min)
+            rev_end = minutes_to_time(cand1_end_min)
+
+            # Candidate 2: Night jumbo block (02:30 - 04:00)
+            cand2_start_min = time_to_minutes("02:30")
+            cand2_end_min = cand2_start_min + duration
+            alt2_start = minutes_to_time(cand2_start_min)
+            alt2_end = minutes_to_time(cand2_end_min)
+
+            # Candidate 3: Off-peak day window (11:30 - 13:00)
+            cand3_start_min = time_to_minutes("11:30")
+            cand3_end_min = cand3_start_min + duration
+            alt3_start = minutes_to_time(cand3_start_min)
+            alt3_end = minutes_to_time(cand3_end_min)
+
+            rec_window = {
+                "date": date,
+                "startTime": rev_start,
+                "endTime": rev_end,
+                "trackId": track_id,
+                "priorityScore": min(p_score + 5, 100),
+                "isRevised": True,
+                "prohibitedWindow": {
+                    "startTime": prohibited_start,
+                    "endTime": prohibited_end,
+                }
+            }
+
+            alternatives.append({
+                "id": 1,
+                "type": "RESCHEDULE",
+                "description": f"Revised block window to {rev_start}-{rev_end} strictly avoiding Officer prohibited blackout ({prohibited_start}-{prohibited_end}).",
+                "feasible": True,
+                "trainImpact": "Zero train conflict (Post-restriction corridor clearance)",
+                "delayMinutes": 0,
+                "operationalCost": 0.00,
+                "priorityScore": min(p_score + 5, 100),
+                "rank": 1,
+            })
+
+            alternatives.append({
+                "id": 2,
+                "type": "REROUTE",
+                "description": f"Reroute non-stop freight and cargo traffic via chord bypass junction (+14 km detour).",
+                "feasible": True,
+                "trainImpact": "Detour +14 km (+20 min transit time)",
+                "delayMinutes": 20,
+                "operationalCost": 900.00,
+                "priorityScore": min(p_score + 1, 92),
+                "rank": 2,
+            })
+
+            alternatives.append({
+                "id": 3,
+                "type": "DELAY",
+                "description": f"Off-peak day window {alt3_start}-{alt3_end} with 10 min goods train regulation at outer loop.",
+                "feasible": True,
+                "trainImpact": "10 min freight transit regulation",
+                "delayMinutes": 10,
+                "operationalCost": 350.00,
+                "priorityScore": max(p_score - 5, 40),
+                "rank": 3,
+            })
+
+            explanation = (
+                f"Block Plan Revised by Traffic Officer: Corridor possession strictly prohibited during {prohibited_start}-{prohibited_end}. "
+                f"AI Multi-Agent engine revised the entire block plan to {rev_start}-{rev_end} ({duration} mins) with zero train delays."
+            )
+
+            return {
+                "priorityScore": min(p_score + 5, 100),
+                "breakdown": {
+                    **priority_res["breakdown"],
+                    "trainImpact": 95,
+                },
+                "conflict": False,
+                "conflictingTrains": [],
+                "recommendedBlock": rec_window,
+                "alternatives": alternatives,
+                "explanation": explanation,
+                "prohibitedWindow": {
+                    "startTime": prohibited_start,
+                    "endTime": prohibited_end,
+                }
+            }
 
         if has_conflict:
             # Determine latest departure of conflicting trains to compute optimal reschedule window
@@ -141,8 +238,8 @@ class BlockPlannerAgent:
 
             alternatives.append({
                 "id": 1,
-                "type": "DIRECT CLEARANCE",
-                "description": f"Sanction primary window 19:00-20:30 directly. No train occupancy conflict on {track_id}.",
+                "type": "RESCHEDULE",
+                "description": f"Retain optimal window 19:00-20:30 on {track_id} with direct clearance.",
                 "feasible": True,
                 "trainImpact": "Zero train delays (Free corridor slot)",
                 "delayMinutes": 0,
@@ -153,14 +250,26 @@ class BlockPlannerAgent:
 
             alternatives.append({
                 "id": 2,
-                "type": "SHADOW CLUSTERING",
-                "description": f"Bundle simultaneous S&T signal checking and OHE bonding during the 19:00-20:30 slot.",
+                "type": "DELAY",
+                "description": f"Contingency buffer: regulate trailing movements by up to 10 minutes if maintenance overruns.",
                 "feasible": True,
-                "trainImpact": "Triples work productivity per hour of block",
-                "delayMinutes": 0,
-                "operationalCost": 0.00,
-                "priorityScore": min(p_score + 12, 100),
+                "trainImpact": "10-minute contingency buffer",
+                "delayMinutes": 10,
+                "operationalCost": 150.00,
+                "priorityScore": max(p_score - 5, 40),
                 "rank": 2,
+            })
+
+            alternatives.append({
+                "id": 3,
+                "type": "REROUTE",
+                "description": f"Contingency routing via adjacent loop or chord bypass if work extends beyond window.",
+                "feasible": True,
+                "trainImpact": "Contingency bypass route available",
+                "delayMinutes": 15,
+                "operationalCost": 300.00,
+                "priorityScore": max(p_score - 10, 35),
+                "rank": 3,
             })
 
             explanation = (

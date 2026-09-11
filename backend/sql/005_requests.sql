@@ -6,12 +6,16 @@ CREATE TABLE IF NOT EXISTS maintenance_requests (
     department VARCHAR(100) NOT NULL,
     asset_type VARCHAR(50) NOT NULL,
     track_id VARCHAR(50) REFERENCES tracks(track_id) ON DELETE CASCADE,
+    track_ids TEXT[],
     task_type VARCHAR(100) NOT NULL,
     description TEXT,
     requested_date DATE NOT NULL,
+    from_date DATE,
+    to_date DATE,
     preferred_start_time TIME NOT NULL,
     preferred_end_time TIME NOT NULL,
     estimated_duration_minutes INT NOT NULL DEFAULT 60,
+    asset_condition VARCHAR(50) DEFAULT 'Good',
     required_block BOOLEAN DEFAULT TRUE,
     status VARCHAR(50) DEFAULT 'SUBMITTED' CHECK (
         status IN (

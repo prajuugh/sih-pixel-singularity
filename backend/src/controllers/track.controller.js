@@ -158,76 +158,11 @@ function formatTime(totalMinutes) {
   return `${h}:${m}`;
 }
 
+const { generateRealWorldTrackSchedule } = require("../services/schedule.service");
+
 // Generate realistic schedules for ANY track segment across Karnataka
 function getOrGenerateSchedulesForTrack(trackId, requestedDay) {
-  const schedules = [];
-
-  // 1. Check explicit schedules first (from trainSchedules.json)
-  for (const train of explicitTrainSchedules) {
-    if (requestedDay && !train.operatingDays.includes(requestedDay)) {
-      continue;
-    }
-    const routeEntry = train.route.find(
-      (section) => section.trackId.toUpperCase() === trackId
-    );
-    if (routeEntry) {
-      schedules.push({
-        trainNo: train.trainNo,
-        trainName: train.trainName,
-        source: train.source,
-        destination: train.destination,
-        operatingDays: train.operatingDays,
-        type: train.type || "EXPRESS",
-        trackId: routeEntry.trackId,
-        arrival: routeEntry.arrival,
-        departure: routeEntry.departure,
-      });
-    }
-  }
-
-  // If explicit schedules exist, return them
-  if (schedules.length > 0) {
-    return schedules;
-  }
-
-  // 2. Deterministic schedule generator for any other Karnataka track
-  const numMatch = trackId.match(/\d+/);
-  const trackNum = numMatch ? parseInt(numMatch[0], 10) : 1;
-
-  // Pick 2-3 trains deterministically from pool
-  const count = (trackNum % 2 === 0) ? 2 : 3;
-  const selectedIndices = [];
-
-  for (let i = 0; i < count; i++) {
-    const idx = (trackNum * 7 + i * 5) % KARNATAKA_TRAIN_POOL.length;
-    if (!selectedIndices.includes(idx)) {
-      selectedIndices.push(idx);
-    }
-  }
-
-  for (let i = 0; i < selectedIndices.length; i++) {
-    const train = KARNATAKA_TRAIN_POOL[selectedIndices[i]];
-    if (requestedDay && !train.operatingDays.includes(requestedDay)) {
-      continue;
-    }
-
-    const startMinutes = (train.baseHour * 60 + train.baseMin + (trackNum * 3) + i * 90) % 1440;
-    const endMinutes = (startMinutes + 5 + (trackNum % 4)) % 1440;
-
-    schedules.push({
-      trainNo: train.trainNo,
-      trainName: train.trainName,
-      type: train.type,
-      source: train.source,
-      destination: train.destination,
-      operatingDays: train.operatingDays,
-      trackId,
-      arrival: formatTime(startMinutes),
-      departure: formatTime(endMinutes),
-    });
-  }
-
-  return schedules;
+  return generateRealWorldTrackSchedule(trackId, requestedDay);
 }
 
 
