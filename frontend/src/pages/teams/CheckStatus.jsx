@@ -77,10 +77,25 @@ export default function CheckStatus() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => {
-                  const isOpen = expandedId === r.id;
-                  return (
-                    <Fragment key={r.id}>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-12 text-gray-500">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Search size={32} className="text-gray-300" />
+                        <p className="font-semibold text-gray-700">No Maintenance Requests Found</p>
+                        <p className="text-xs text-gray-400">
+                          {query
+                            ? `No requests match "${query}". Try another ID or clear the search.`
+                            : "No maintenance requests have been submitted yet. Submit a new request from the Team Requests portal."}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((r) => {
+                    const isOpen = expandedId === r.id;
+                    return (
+                      <Fragment key={r.id}>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 px-2">
                           <button
@@ -186,7 +201,8 @@ export default function CheckStatus() {
                       )}
                     </Fragment>
                   );
-                })}
+                })
+              )}
               </tbody>
             </table>
 

@@ -91,101 +91,7 @@ export const mockDashboardStats = [
 
 export const mockUpcomingMaintenance = [];
 
-export const mockRequests = [
-  {
-    id: "ENG-2026-00001",
-    type: "Track Tamping & Alignment",
-    department: "Engineering",
-    date: "2026-09-15",
-    status: "Approved",
-    stage: "Scheduled",
-    reason: "Ballast packing and dynamic track stabilization",
-    updated: "2026-09-10",
-    priorityScore: 85,
-    conflict: false,
-    recommendedBlock: {
-      date: "2026-09-15",
-      startTime: "19:00",
-      endTime: "21:00",
-      trackId: "KA-T-000342",
-      priorityScore: 85,
-    },
-    raw: {
-      request_id: "ENG-2026-00001",
-      department: "Engineering",
-      task_type: "Track Tamping & Alignment",
-      track_id: "KA-T-000342",
-      track_ids: ["KA-T-000342"],
-      status: "APPROVED",
-      preferred_start_time: "19:00",
-      preferred_end_time: "21:00",
-      estimated_duration_minutes: 120,
-      description: "Ballast packing and dynamic track stabilization",
-    },
-  },
-  {
-    id: "SIG-2026-00002",
-    type: "Point Machine & Interlocking Overhaul",
-    department: "Signal & Telecom",
-    date: "2026-09-15",
-    status: "Approved",
-    stage: "Scheduled",
-    reason: "Dual motor point machine alignment & electronic relay testing",
-    updated: "2026-09-10",
-    priorityScore: 78,
-    conflict: false,
-    recommendedBlock: {
-      date: "2026-09-15",
-      startTime: "21:00",
-      endTime: "22:30",
-      trackId: "KA-T-000100",
-      priorityScore: 78,
-    },
-    raw: {
-      request_id: "SIG-2026-00002",
-      department: "Signal & Telecom",
-      task_type: "Point Machine & Interlocking Overhaul",
-      track_id: "KA-T-000100",
-      track_ids: ["KA-T-000100"],
-      status: "APPROVED",
-      preferred_start_time: "21:00",
-      preferred_end_time: "22:30",
-      estimated_duration_minutes: 90,
-      description: "Dual motor point machine alignment & electronic relay testing",
-    },
-  },
-  {
-    id: "TRD-2026-00003",
-    type: "OHE 25kV Cantilever & Wire Inspection",
-    department: "Traction Distribution",
-    date: "2026-09-15",
-    status: "Approved",
-    stage: "Scheduled",
-    reason: "Overhead catenary inspection and contact wire height calibration",
-    updated: "2026-09-10",
-    priorityScore: 92,
-    conflict: false,
-    recommendedBlock: {
-      date: "2026-09-15",
-      startTime: "22:30",
-      endTime: "00:30",
-      trackId: "KA-T-000550",
-      priorityScore: 92,
-    },
-    raw: {
-      request_id: "TRD-2026-00003",
-      department: "Traction Distribution",
-      task_type: "OHE 25kV Cantilever & Wire Inspection",
-      track_id: "KA-T-000550",
-      track_ids: ["KA-T-000550"],
-      status: "APPROVED",
-      preferred_start_time: "22:30",
-      preferred_end_time: "00:30",
-      estimated_duration_minutes: 120,
-      description: "Overhead catenary inspection and contact wire height calibration",
-    },
-  },
-];
+export const mockRequests = [];
 
 export const mockTasksByDate = {};
 
@@ -197,20 +103,9 @@ export const mockAdminStats = [
   { label: "Admins", value: 1 },
 ];
 
-export const mockDepartmentUsage = [
-  { name: "Engineering", count: 4, max: 4 },
-  { name: "Signal & Telecom", count: 3, max: 4 },
-  { name: "Traction", count: 3, max: 4 },
-  { name: "Control", count: 2, max: 4 },
-];
+export const mockDepartmentUsage = [];
 
-// TODO: replace with data fetched from the backend
-export const mockActivity = [
-  { date: "10 Sep 2026, 10:42", action: "Created User", user: "eng_team_03", details: "New management user added (Engineering)" },
-  { date: "10 Sep 2026, 10:31", action: "Activated User", user: "st_team_02", details: "User account activated (Signal & Telecom)" },
-  { date: "10 Sep 2026, 09:58", action: "Reset Password", user: "officer_01", details: "Password reset for officer account" },
-  { date: "10 Sep 2026, 09:35", action: "Deactivated User", user: "trd_team_04", details: "User account deactivated (Traction)" },
-  { date: "09 Sep 2026, 18:21", action: "Created User", user: "ctrl_admin_02", details: "New admin user added" },
-];
+// Clean initial activity log
+export const mockActivity = [];
 
 export const userDepartmentOptions = ["Engineering", "Signal & Telecom", "Traction", "Control"];
