@@ -82,9 +82,35 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
     ? request.alternatives
     : (request.agentPlan?.alternatives || []);
 
-  // Ensure all 3 canonical operational options (RESCHEDULE, REROUTE, DELAY) are present
+  // When there are NO trains scheduled/clashing (hasConflict is false), no REROUTE or DELAY options are needed
   const alternatives = (() => {
-    const list = [...rawAlternatives];
+    if (!hasConflict) {
+      // Clear corridor slot: only DIRECT CLEARANCE / optimal window, no REROUTE or DELAY needed
+      const clearSlotAlt = rawAlternatives.find(
+        (a) => a.type === "DIRECT_CLEARANCE" || a.type === "RESCHEDULE"
+      );
+      if (clearSlotAlt) {
+        return [{
+          id: clearSlotAlt.id || "DIRECT_CLEARANCE",
+          type: clearSlotAlt.type || "DIRECT_CLEARANCE",
+          description: clearSlotAlt.description || `Direct clearance: Optimal block window ${recommendedBlock?.startTime || "19:00"}-${recommendedBlock?.endTime || "20:30"} (Zero train conflicts).`,
+          trainImpact: "Zero train conflict (Clear corridor slot)",
+          priorityScore: priorityScore,
+          rank: 1,
+        }];
+      }
+      return [{
+        id: "DIRECT_CLEARANCE",
+        type: "DIRECT_CLEARANCE",
+        description: `Direct clearance on section: Requested window ${recommendedBlock?.startTime || "19:00"}-${recommendedBlock?.endTime || "20:30"} is completely clear of train traffic.`,
+        trainImpact: "Zero train conflict (Free slot)",
+        priorityScore: priorityScore,
+        rank: 1,
+      }];
+    }
+
+    // When CONFLICT EXISTS: provide full ranked operational options (RESCHEDULE, DELAY, REROUTE)
+    const list = rawAlternatives.filter((a) => a.type !== "DIRECT_CLEARANCE");
     const types = list.map((a) => a.type);
     if (!types.includes("RESCHEDULE")) {
       list.push({
@@ -96,16 +122,6 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
         rank: 1,
       });
     }
-    if (!types.includes("REROUTE")) {
-      list.push({
-        id: "REROUTE",
-        type: "REROUTE",
-        description: "Reroute freight traffic via chord junction line (+14 km detour).",
-        trainImpact: "Detour +14 km (+20 min transit time)",
-        priorityScore: Math.max(priorityScore - 6, 50),
-        rank: 2,
-      });
-    }
     if (!types.includes("DELAY")) {
       list.push({
         id: "DELAY",
@@ -113,6 +129,16 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
         description: "Regulate goods train at preceding loop siding for 15 minutes.",
         trainImpact: "15 min goods regulation delay",
         priorityScore: Math.max(priorityScore - 12, 45),
+        rank: 2,
+      });
+    }
+    if (!types.includes("REROUTE")) {
+      list.push({
+        id: "REROUTE",
+        type: "REROUTE",
+        description: "Reroute freight traffic via chord junction line (+14 km detour).",
+        trainImpact: "Detour +14 km (+20 min transit time)",
+        priorityScore: Math.max(priorityScore - 6, 50),
         rank: 3,
       });
     }
@@ -138,14 +164,15 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
   const handleOpenReview = (type, preSelectedAlt = null) => {
     setDecisionType(type);
-    const chosenId = preSelectedAlt?.id || preSelectedAlt?.type || null;
+    const chosenAlt = preSelectedAlt || (type === "APPROVED" && !hasConflict ? alternatives[0] : null);
+    const chosenId = chosenAlt?.id || chosenAlt?.type || null;
     setSelectedAltId(chosenId);
 
     if (type === "APPROVED") {
-      if (preSelectedAlt) {
-        setFeedback(`Approved under [${preSelectedAlt.type}]: ${preSelectedAlt.description}`);
+      if (chosenAlt) {
+        setFeedback(`Approved under [${chosenAlt.type}]: ${chosenAlt.description}`);
       } else {
-        setFeedback("");
+        setFeedback("Sanctioned without restriction. Clear corridor block possession approved.");
       }
     } else if (type === "REVISION_REQUIRED") {
       setSelectedAltId(null);
@@ -170,9 +197,13 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
   const handleSubmitReview = (e) => {
     e.preventDefault();
-    if (decisionType === "APPROVED" && !selectedAltId) {
-      alert("Please select one of the operational options (Reschedule, Reroute, or Delay) before approving.");
-      return;
+    let finalAltId = selectedAltId;
+    if (decisionType === "APPROVED" && !finalAltId) {
+      if (hasConflict) {
+        alert("Please select one of the operational options (Reschedule, Reroute, or Delay) before approving.");
+        return;
+      }
+      finalAltId = alternatives[0]?.id || alternatives[0]?.type || "DIRECT_CLEARANCE";
     }
 
     const prohibitedData =
@@ -704,14 +735,18 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-gray-900 uppercase tracking-wider">
-                    Select Operational Option (Mandatory for Approval):
+                    {hasConflict ? "Select Operational Option (Mandatory for Approval):" : "Sanctioned Operational Option:"}
                   </label>
-                  <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                    Selection Required *
-                  </span>
+                  {hasConflict && (
+                    <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                      Selection Required *
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-gray-500 mb-2.5">
-                  Before sanctioning the block plan, you must select one of the operational execution alternatives (Reschedule, Reroute, or Delay):
+                  {hasConflict
+                    ? "Before sanctioning the block plan, you must select one of the operational execution alternatives (Reschedule, Reroute, or Delay):"
+                    : "The requested window is free of train clashes. Confirm direct clearance execution:"}
                 </p>
 
                 <div className="space-y-2">
@@ -756,7 +791,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                   })}
                 </div>
 
-                {!selectedAltId && (
+                {!selectedAltId && hasConflict && (
                   <div className="mt-2.5 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800 flex items-center gap-2">
                     <AlertCircle size={15} className="text-amber-600 shrink-0" />
                     <span>Please click an option above (Reschedule, Reroute, or Delay) to enable plan approval.</span>

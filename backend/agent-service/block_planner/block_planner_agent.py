@@ -127,29 +127,8 @@ class BlockPlannerAgent:
                 "rank": 1,
             })
 
-            alternatives.append({
-                "id": 2,
-                "type": "REROUTE",
-                "description": f"Reroute non-stop freight and cargo traffic via chord bypass junction (+14 km detour).",
-                "feasible": True,
-                "trainImpact": "Detour +14 km (+20 min transit time)",
-                "delayMinutes": 20,
-                "operationalCost": 900.00,
-                "priorityScore": min(p_score + 1, 92),
-                "rank": 2,
-            })
-
-            alternatives.append({
-                "id": 3,
-                "type": "DELAY",
-                "description": f"Off-peak day window {alt3_start}-{alt3_end} with 10 min goods train regulation at outer loop.",
-                "feasible": True,
-                "trainImpact": "10 min freight transit regulation",
-                "delayMinutes": 10,
-                "operationalCost": 350.00,
-                "priorityScore": max(p_score - 5, 40),
-                "rank": 3,
-            })
+            # If any conflicting trains were present during the revised window, REROUTE/DELAY would apply.
+            # Since the window has zero clashes, no reroute or delay alternatives are required.
 
             explanation = (
                 f"Block Plan Revised by Traffic Officer: Corridor possession strictly prohibited during {prohibited_start}-{prohibited_end}. "
@@ -233,48 +212,27 @@ class BlockPlannerAgent:
                 f"Recommended shift to {resched_start}-{resched_end} avoids train deceleration and guarantees safety buffer."
             )
         else:
-            # NO CONFLICT DETECTED FOR THIS TRACK!
-            rec_window = {"date": date, "startTime": "19:00", "endTime": "20:30", "trackId": track_id, "priorityScore": p_score}
+            # NO CONFLICT DETECTED FOR THIS TRACK / TIMETABLE
+            req_start = maintenance_info.get("startTime", "19:00")
+            req_end = maintenance_info.get("endTime", "20:30")
+            rec_window = {"date": date, "startTime": req_start, "endTime": req_end, "trackId": track_id, "priorityScore": p_score}
 
+            # If there are NO trains scheduled/clashing, no REROUTE or DELAY options are needed
             alternatives.append({
                 "id": 1,
-                "type": "RESCHEDULE",
-                "description": f"Retain optimal window 19:00-20:30 on {track_id} with direct clearance.",
+                "type": "DIRECT_CLEARANCE",
+                "description": f"Direct clearance on {track_id}: Requested window {req_start}-{req_end} is completely clear of train traffic.",
                 "feasible": True,
-                "trainImpact": "Zero train delays (Free corridor slot)",
+                "trainImpact": "Zero train conflict (Free corridor slot)",
                 "delayMinutes": 0,
                 "operationalCost": 0.00,
                 "priorityScore": min(p_score + 10, 100),
                 "rank": 1,
             })
 
-            alternatives.append({
-                "id": 2,
-                "type": "DELAY",
-                "description": f"Contingency buffer: regulate trailing movements by up to 10 minutes if maintenance overruns.",
-                "feasible": True,
-                "trainImpact": "10-minute contingency buffer",
-                "delayMinutes": 10,
-                "operationalCost": 150.00,
-                "priorityScore": max(p_score - 5, 40),
-                "rank": 2,
-            })
-
-            alternatives.append({
-                "id": 3,
-                "type": "REROUTE",
-                "description": f"Contingency routing via adjacent loop or chord bypass if work extends beyond window.",
-                "feasible": True,
-                "trainImpact": "Contingency bypass route available",
-                "delayMinutes": 15,
-                "operationalCost": 300.00,
-                "priorityScore": max(p_score - 10, 35),
-                "rank": 3,
-            })
-
             explanation = (
                 f"MCDA Priority Score: {p_score}/100. Clear corridor window on {track_id}. "
-                f"Direct maintenance clearance recommended with zero train delay impact."
+                f"Direct maintenance clearance sanctioned with zero train conflicts or clashing timetables."
             )
 
         return {
