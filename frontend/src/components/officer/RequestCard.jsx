@@ -1,859 +1,188 @@
-// frontend/src/components/officer/RequestCard.jsx
 import { useState } from "react";
-import {
-  AlertTriangle,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  MapPin,
-  Route,
-  Zap,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
-  Sliders,
-  TrendingUp,
-  Ban,
-} from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Ban, CheckCircle2, ChevronDown, ChevronUp, Clock3, MapPin, Route, ShieldAlert, SlidersHorizontal, Sparkles, TrainFront } from "lucide-react";
 import { requestStatusStyles } from "../../utils/constants";
 import Modal from "../common/Modal";
 import AgentDecisionTrace from "../common/AgentDecisionTrace";
+import PlanExplanation from "./PlanExplanation";
 
-function computeRevisedPreview(pStart, pEnd, duration = 90) {
-  if (!pStart || !pEnd) return null;
-  const parseMin = (t) => {
-    const [h, m] = (t || "00:00").split(":").map(Number);
-    return (h || 0) * 60 + (m || 0);
-  };
-  const formatMin = (min) => {
-    const norm = ((min % 1440) + 1440) % 1440;
-    const h = String(Math.floor(norm / 60)).padStart(2, "0");
-    const m = String(norm % 60).padStart(2, "0");
-    return `${h}:${m}`;
-  };
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] focus-visible:ring-offset-2";
+const windowText = (start, end) => start && end ? `${start}–${end}` : "Not available";
 
-  let pEndMin = parseMin(pEnd);
-  const pStartMin = parseMin(pStart);
-  if (pEndMin <= pStartMin) pEndMin += 1440;
-
-  const candStart = pEndMin + 15;
-  const candEnd = candStart + duration;
-
-  return {
-    startTime: formatMin(candStart),
-    endTime: formatMin(candEnd),
-  };
+function computeRevisedPreview(start, end, duration = 90) {
+  if (!start || !end) return null;
+  const toMinutes = (value) => { const [h, m] = value.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+  const toTime = (minutes) => { const value = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`; };
+  let endMinutes = toMinutes(end);
+  if (endMinutes <= toMinutes(start)) endMinutes += 1440;
+  return { startTime: toTime(endMinutes + 15), endTime: toTime(endMinutes + 15 + duration) };
 }
 
 export default function RequestCard({ request, onApprove, onDecline, onRevision }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const [showTrace, setShowTrace] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [decisionType, setDecisionType] = useState("APPROVED");
   const [selectedAltId, setSelectedAltId] = useState(null);
   const [feedback, setFeedback] = useState("");
-  const [showBreakdown, setShowBreakdown] = useState(false);
-  const [showAgentTrace, setShowAgentTrace] = useState(false);
+  const [formError, setFormError] = useState("");
 
-  // Prohibited time window state (times on which block cannot be planned)
   const initialProhibited = request.raw?.prohibited_window || request.prohibitedWindow;
-  const [prohibitedStartTime, setProhibitedStartTime] = useState(
-    initialProhibited?.startTime || request.raw?.preferred_start_time || "18:00"
-  );
-  const [prohibitedEndTime, setProhibitedEndTime] = useState(
-    initialProhibited?.endTime || request.raw?.preferred_end_time || "22:00"
-  );
-
-  // Derive live AI Agent Plan information
-  const priorityScore = request.priorityScore ?? request.agentPlan?.priorityScore ?? 75;
+  const requestedStart = request.raw?.preferred_start_time || "19:00";
+  const requestedEnd = request.raw?.preferred_end_time || "21:00";
+  const [prohibitedStartTime, setProhibitedStartTime] = useState(initialProhibited?.startTime || requestedStart);
+  const [prohibitedEndTime, setProhibitedEndTime] = useState(initialProhibited?.endTime || requestedEnd);
+  const isV2Plan = request.agentPlan?.schemaVersion === "2.0";
+  const priorityScore = request.priorityScore ?? request.agentPlan?.priorityScore ?? (isV2Plan ? null : 75);
   const breakdown = request.agentPlan?.breakdown || {};
   const prohibitedWindow = request.raw?.prohibited_window || request.prohibitedWindow;
   const recommendedBlock = request.recommendedBlock || request.agentPlan?.recommendedBlock;
-  const isRevised = Boolean(
-    prohibitedWindow ||
-    recommendedBlock?.isRevised ||
-    request.status === "Revised Plan" ||
-    request.status === "AI Processing" ||
-    request.status === "REVISION_REQUIRED"
-  );
-  const hasConflict = isRevised ? false : Boolean(
-    request.conflict || (request.conflictingTrains && request.conflictingTrains.length > 0)
-  );
+  const isVerifiedPlan = !isV2Plan || request.agentPlan?.verification?.passed === true;
+  const isRevised = Boolean(prohibitedWindow || recommendedBlock?.isRevised || ["Revised Plan", "AI Processing", "REVISION_REQUIRED"].includes(request.status));
+  const hasConflict = request.agentPlan?.verification?.passed === false || (!isRevised && Boolean(request.conflict || request.conflictingTrains?.length));
   const conflictingTrains = isRevised ? [] : (request.conflictingTrains || request.agentPlan?.conflictingTrains || []);
-  const rawAlternatives = (request.alternatives && request.alternatives.length > 0)
-    ? request.alternatives
-    : (request.agentPlan?.alternatives || []);
+  const rawAlternatives = (request.alternatives?.length ? request.alternatives : (request.agentPlan?.alternatives || []))
+    .filter((option) => option.type !== "REROUTE" || option.routeGeometry?.coordinates?.length > 1);
 
-  // When there are NO trains scheduled/clashing (hasConflict is false), no REROUTE or DELAY options are needed
+  // When there are NO trains scheduled/clashing, no REROUTE or DELAY options are needed
   const alternatives = (() => {
     if (!hasConflict) {
-      // Clear corridor slot: only DIRECT CLEARANCE / optimal window, no REROUTE or DELAY needed
-      const clearSlotAlt = rawAlternatives.find(
-        (a) => a.type === "DIRECT_CLEARANCE" || a.type === "RESCHEDULE"
-      );
-      if (clearSlotAlt) {
-        return [{
-          id: clearSlotAlt.id || "DIRECT_CLEARANCE",
-          type: clearSlotAlt.type || "DIRECT_CLEARANCE",
-          description: clearSlotAlt.description || `Direct clearance: Optimal block window ${recommendedBlock?.startTime || "19:00"}-${recommendedBlock?.endTime || "20:30"} (Zero train conflicts).`,
-          trainImpact: "Zero train conflict (Clear corridor slot)",
-          priorityScore: priorityScore,
-          rank: 1,
-        }];
-      }
+      const clearOpts = rawAlternatives.filter((a) => a.type !== "DELAY" && a.type !== "REROUTE");
+      if (clearOpts.length > 0) return clearOpts;
       return [{
         id: "DIRECT_CLEARANCE",
         type: "DIRECT_CLEARANCE",
-        description: `Direct clearance on section: Requested window ${recommendedBlock?.startTime || "19:00"}-${recommendedBlock?.endTime || "20:30"} is completely clear of train traffic.`,
+        description: `Direct clearance: Requested window ${windowText(recommendedBlock?.startTime || "19:00", recommendedBlock?.endTime || "20:30")} is completely clear of train traffic.`,
         trainImpact: "Zero train conflict (Free slot)",
-        priorityScore: priorityScore,
+        priorityScore,
         rank: 1,
       }];
     }
 
-    // When CONFLICT EXISTS: provide full ranked operational options (RESCHEDULE, DELAY, REROUTE)
-    const list = rawAlternatives.filter((a) => a.type !== "DIRECT_CLEARANCE");
-    const types = list.map((a) => a.type);
-    if (!types.includes("RESCHEDULE")) {
-      list.push({
-        id: "RESCHEDULE",
-        type: "RESCHEDULE",
-        description: `Reschedule block possession to ${recommendedBlock?.startTime || "22:15"}-${recommendedBlock?.endTime || "23:45"} outside peak hours.`,
-        trainImpact: "Zero passenger train disruption",
-        priorityScore: priorityScore,
-        rank: 1,
-      });
-    }
-    if (!types.includes("DELAY")) {
-      list.push({
-        id: "DELAY",
-        type: "DELAY",
-        description: "Regulate goods train at preceding loop siding for 15 minutes.",
-        trainImpact: "15 min goods regulation delay",
-        priorityScore: Math.max(priorityScore - 12, 45),
-        rank: 2,
-      });
-    }
-    if (!types.includes("REROUTE")) {
-      list.push({
-        id: "REROUTE",
-        type: "REROUTE",
-        description: "Reroute freight traffic via chord junction line (+14 km detour).",
-        trainImpact: "Detour +14 km (+20 min transit time)",
-        priorityScore: Math.max(priorityScore - 6, 50),
-        rank: 3,
-      });
-    }
+    if (isV2Plan) return rawAlternatives;
+    const list = [...rawAlternatives];
+    const types = list.map((option) => option.type);
+    if (!types.includes("RESCHEDULE")) list.push({ id: "RESCHEDULE", type: "RESCHEDULE", description: `Move possession to ${windowText(recommendedBlock?.startTime || "22:15", recommendedBlock?.endTime || "23:45")}.`, trainImpact: "No passenger train disruption", priorityScore, rank: 1 });
+    if (!types.includes("DELAY")) list.push({ id: "DELAY", type: "DELAY", description: "Hold the goods train at the preceding loop siding.", trainImpact: "15 min goods delay", priorityScore: Math.max((priorityScore || 75) - 12, 45), rank: 2 });
+    if (!types.includes("REROUTE")) list.push({ id: "REROUTE", type: "REROUTE", description: "Reroute freight traffic via chord junction line (+14 km detour).", trainImpact: "Detour +14 km (+20 min transit time)", priorityScore: Math.max((priorityScore || 75) - 6, 40), rank: 3 });
     return list;
   })();
 
-  const selectedAlt = alternatives.find(
-    (a) => a.id === selectedAltId || a.type === selectedAltId
-  );
-  const aiExplanation = request.aiExplanation || request.agentPlan?.explanation;
-  const tracePlan = {
-    ...request.agentPlan,
-    trackId: request.raw?.track_id || request.agentPlan?.trackId,
-    priorityScore,
-    conflict: hasConflict,
-    conflictingTrains,
-    recommendedBlock,
-    alternatives,
-  };
-  const traceTrackIds = request.raw?.track_ids?.length
-    ? request.raw.track_ids
-    : [request.raw?.track_id || request.agentPlan?.trackId].filter(Boolean);
+  const selectedAlternative = alternatives.find((option) => option.id === selectedAltId || option.type === selectedAltId);
+  const trackIds = request.raw?.track_ids?.length ? request.raw.track_ids : [request.raw?.track_id || request.agentPlan?.trackId].filter(Boolean);
+  const duration = Number(request.raw?.estimated_duration_minutes || 120);
+  const revisedPreview = computeRevisedPreview(prohibitedStartTime, prohibitedEndTime, duration);
+  const scoreTone = priorityScore == null ? "text-slate-500" : priorityScore >= 80 ? "text-rose-700" : priorityScore >= 65 ? "text-amber-700" : "text-emerald-700";
+  const state = !isVerifiedPlan
+    ? { label: "Verification failed", detail: "Approval is blocked until the planner produces a verified option.", icon: ShieldAlert, box: "border-red-200 bg-red-50", text: "text-red-900" }
+    : isRevised
+      ? { label: "Revised plan ready", detail: "A new window was generated outside the prohibited period.", icon: CheckCircle2, box: "border-blue-200 bg-blue-50", text: "text-blue-900" }
+      : hasConflict
+        ? { label: "Conflict needs review", detail: `${conflictingTrains.length || "Timetable"} conflict${conflictingTrains.length === 1 ? "" : "s"} found in the requested window.`, icon: AlertTriangle, box: "border-amber-200 bg-amber-50", text: "text-amber-950" }
+        : { label: "Verified and ready", detail: "No timetable conflict was found for the recommended option.", icon: CheckCircle2, box: "border-emerald-200 bg-emerald-50", text: "text-emerald-950" };
+  const StateIcon = state.icon;
 
-  const handleOpenReview = (type, preSelectedAlt = null) => {
+  const openReview = (type, option = null) => {
+    if (type === "APPROVED" && !isVerifiedPlan) return;
     setDecisionType(type);
-    const chosenAlt = preSelectedAlt || (type === "APPROVED" && !hasConflict ? alternatives[0] : null);
-    const chosenId = chosenAlt?.id || chosenAlt?.type || null;
-    setSelectedAltId(chosenId);
-
+    setFormError("");
     if (type === "APPROVED") {
-      if (chosenAlt) {
-        setFeedback(`Approved under [${chosenAlt.type}]: ${chosenAlt.description}`);
-      } else {
-        setFeedback("Sanctioned without restriction. Clear corridor block possession approved.");
-      }
+      const selected = option || alternatives[0] || null;
+      setSelectedAltId(selected?.id || selected?.type || null);
+      setFeedback(selected ? `Approved under ${selected.type}: ${selected.description}` : "");
     } else if (type === "REVISION_REQUIRED") {
       setSelectedAltId(null);
-      const defaultStart = request.raw?.preferred_start_time || "18:00";
-      const defaultEnd = request.raw?.preferred_end_time || "22:00";
-      setProhibitedStartTime(defaultStart);
-      setProhibitedEndTime(defaultEnd);
-      setFeedback(
-        `Corridor possession prohibited between ${defaultStart} and ${defaultEnd}. Entire block plan revised by AI engine.`
-      );
+      setProhibitedStartTime(requestedStart);
+      setProhibitedEndTime(requestedEnd);
+      setFeedback(`Do not schedule possession between ${requestedStart} and ${requestedEnd}. Generate a new verified plan outside this period.`);
     } else {
       setSelectedAltId(null);
-      setFeedback("Declined due to peak passenger traffic priority on the requested section.");
+      setFeedback("");
     }
     setShowReviewModal(true);
   };
 
-  const handleSelectAlternative = (alt) => {
-    setSelectedAltId(alt.id || alt.type);
-    setFeedback(`Approved under [${alt.type}]: ${alt.description}`);
+  const selectAlternative = (option) => {
+    setSelectedAltId(option.id || option.type);
+    setFeedback(`Approved under ${option.type}: ${option.description}`);
+    setFormError("");
   };
 
-  const handleSubmitReview = (e) => {
-    e.preventDefault();
-    let finalAltId = selectedAltId;
-    if (decisionType === "APPROVED" && !finalAltId) {
-      if (hasConflict) {
-        alert("Please select one of the operational options (Reschedule, Reroute, or Delay) before approving.");
-        return;
-      }
-      finalAltId = alternatives[0]?.id || alternatives[0]?.type || "DIRECT_CLEARANCE";
-    }
-
-    const prohibitedData =
-      decisionType === "REVISION_REQUIRED"
-        ? {
-            startTime: prohibitedStartTime,
-            endTime: prohibitedEndTime,
-            reason: feedback,
-          }
-        : null;
-
-    if (decisionType === "APPROVED") {
-      onApprove?.(request, feedback, selectedAltId);
-    } else if (decisionType === "REVISION_REQUIRED") {
-      onRevision?.(request, feedback, selectedAltId, prohibitedData);
-    } else {
-      onDecline?.(request, feedback);
-    }
+  const submitReview = (event) => {
+    event.preventDefault();
+    if (decisionType === "APPROVED" && !isVerifiedPlan) return setFormError("This plan failed verification and cannot be approved.");
+    if (decisionType === "APPROVED" && !selectedAltId) return setFormError("Select one operational option before approving.");
+    if (!feedback.trim()) return setFormError("Add a short reason or instruction for this decision.");
+    if (decisionType === "APPROVED") onApprove?.(request, feedback, selectedAltId);
+    else if (decisionType === "REVISION_REQUIRED") onRevision?.(request, feedback, null, { startTime: prohibitedStartTime, endTime: prohibitedEndTime, reason: feedback });
+    else onDecline?.(request, feedback);
     setShowReviewModal(false);
   };
 
-  // Score styling
-  const scoreColor =
-    priorityScore >= 80
-      ? "bg-purple-50 text-purple-800 border-purple-200"
-      : priorityScore >= 65
-      ? "bg-blue-50 text-blue-800 border-blue-200"
-      : "bg-emerald-50 text-emerald-800 border-emerald-200";
+  const tracePlan = { ...request.agentPlan, trackId: request.raw?.track_id || request.agentPlan?.trackId, priorityScore, conflict: hasConflict, conflictingTrains, recommendedBlock, alternatives };
 
   return (
-    <div className="relative flex flex-col justify-between gap-4 rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.06] transition-[box-shadow] duration-150 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_12px_28px_rgb(0_0_0/0.08)]">
-      {/* Header with Department, Track, and Live Status */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-[#b83825] bg-green-100 px-2.5 py-0.5 rounded">
-              {request.department}
-            </span>
-            <span className="text-xs font-semibold text-gray-500 flex items-center gap-1">
-              <MapPin size={12} className="text-green-700" /> {request.raw?.track_id || "KA-T-000342"}
-            </span>
-
-            {/* AI MCDA Priority Score Badge */}
-            <span
-              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border ${scoreColor}`}
-            >
-              <Zap size={11} className="text-amber-500" />
-              MCDA Score: {priorityScore}/100
-            </span>
+    <article className="overflow-hidden rounded-xl border border-[#d9e1e5] bg-white shadow-sm shadow-slate-900/[0.03]">
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-[#60717d]"><span className={`rounded-full px-2.5 py-1 font-semibold ${requestStatusStyles[request.status] || "bg-blue-100 text-blue-800"}`}>{request.status}</span><span>{request.department}</span><span aria-hidden="true">·</span><span className="font-mono text-xs">{request.id}</span></div>
+            <h3 className="mt-3 text-xl font-semibold tracking-[-0.02em] text-[#172630]">{request.type}</h3>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[#526570]"><span className="inline-flex items-center gap-1.5"><MapPin size={16} aria-hidden="true" />{trackIds.join(", ") || "Track not specified"}</span><span className="inline-flex items-center gap-1.5"><Clock3 size={16} aria-hidden="true" />{request.date} · {duration} min</span></div>
           </div>
-
-          <h4 className="font-bold text-gray-900 text-lg mt-1.5">{request.type}</h4>
-          <p className="text-xs font-mono text-gray-400">{request.id}</p>
+          <div className="flex shrink-0 items-center justify-between gap-5 rounded-lg bg-[#f5f7f8] px-4 py-3 sm:block sm:text-right"><span className="text-sm font-medium text-[#687984] sm:block">Priority</span><span className={`text-2xl font-semibold ${scoreTone}`}>{priorityScore ?? "—"}<span className="text-sm font-normal text-slate-500">/100</span></span></div>
         </div>
 
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-            requestStatusStyles[request.status] || "bg-blue-100 text-blue-700"
-          }`}
-        >
-          {request.status}
-        </span>
-      </div>
+        <div className={`mt-4 flex items-start gap-3 rounded-lg border p-3.5 ${state.box} ${state.text}`}><StateIcon size={20} className="mt-0.5 shrink-0" aria-hidden="true" /><div><p className="font-semibold">{state.label}</p><p className="mt-0.5 text-sm leading-5 opacity-80">{state.detail}</p></div></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch"><div className="rounded-lg border border-[#e1e6e8] bg-[#f8fafb] p-3.5"><p className="text-sm font-medium text-[#657680]">Requested window</p><p className="mt-1 font-mono text-lg font-semibold text-[#243743]">{windowText(requestedStart, requestedEnd)}</p></div><div className="hidden items-center text-[#8aa0ad] sm:flex" aria-hidden="true">→</div><div className="rounded-lg border border-[#cce2d5] bg-[#f2faf5] p-3.5"><p className="text-sm font-medium text-emerald-800">Recommended window</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-950">{windowText(recommendedBlock?.startTime, recommendedBlock?.endTime)}</p></div></div>
 
-      {/* Possession Window Details */}
-      <div className="space-y-2.5 text-xs bg-gray-50 p-3.5 rounded-lg border border-gray-100">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-gray-400 font-medium">Requested Window</p>
-            <p className="text-gray-900 font-semibold flex items-center gap-1 mt-0.5">
-              <Clock size={13} className="text-green-700" />
-              {request.raw?.preferred_start_time || "19:00"} - {request.raw?.preferred_end_time || "21:00"}
-              &nbsp;({request.date})
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 font-medium">Estimated Possession</p>
-            <p className="text-gray-900 font-semibold mt-0.5">
-              {request.raw?.estimated_duration_minutes || 120} mins (
-              {(Number(request.raw?.estimated_duration_minutes || 120) / 60).toFixed(1)} hrs)
-            </p>
-          </div>
-        </div>
-
-        {/* Track possession zone */}
-        <div>
-          <p className="text-gray-400 font-medium mb-1">
-            Track Possession Segments{" "}
-            {(request.raw?.track_ids?.length || 1) > 1 && (
-              <span className="text-green-700 font-bold">
-                ({request.raw.track_ids.length} segments)
-              </span>
-            )}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {(request.raw?.track_ids?.length > 0
-              ? request.raw.track_ids
-              : [request.raw?.track_id || "KA-T-000342"]
-            ).map((tid) => (
-              <span
-                key={tid}
-                className="inline-flex items-center gap-1 text-[11px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-800"
-              >
-                <Route size={10} className="text-green-700" />
-                {tid}
-              </span>
-            ))}
-          </div>
+        <div className="mt-4 flex flex-col-reverse gap-2 border-t border-[#edf0f1] pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <button type="button" onClick={() => setShowDetails((open) => !open)} aria-expanded={showDetails} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] ${focusRing}`}>{showDetails ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}{showDetails ? "Hide evidence" : "View evidence and agent explanation"}</button>
+          <div className="grid grid-cols-3 gap-2 sm:flex"><button type="button" onClick={() => openReview("REJECTED")} className={`min-h-11 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 hover:bg-red-50 ${focusRing}`}>Decline</button><button type="button" onClick={() => openReview("REVISION_REQUIRED")} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100 ${focusRing}`}><SlidersHorizontal size={16} aria-hidden="true" />Modify</button><button type="button" onClick={() => openReview("APPROVED")} disabled={!isVerifiedPlan || alternatives.length === 0} title={!isVerifiedPlan ? "Verification must pass before approval" : undefined} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white ${focusRing} ${isVerifiedPlan && alternatives.length ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}>{decisionType === "APPROVED" ? <CheckCircle2 size={16} aria-hidden="true" /> : decisionType === "REVISION_REQUIRED" ? <Route size={16} aria-hidden="true" /> : <Ban size={16} aria-hidden="true" />}{decisionType === "APPROVED" ? `Approve ${selectedAlternative?.type || "selected option"}` : decisionType === "REVISION_REQUIRED" ? "Generate revised plan" : "Confirm decline"}</button></div>
         </div>
       </div>
 
-      {/* PROMINENT REVISED BLOCK PLAN DISPLAY (When request is revised / blackout enforced) */}
-      {isRevised ? (
-        <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 border-2 border-emerald-400 rounded-xl p-4 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-              </span>
-              <h5 className="font-extrabold text-emerald-950 text-sm tracking-wide uppercase flex items-center gap-1.5">
-                <Sparkles size={16} className="text-amber-500" />
-                Revised Block Plan
-              </h5>
-            </div>
-            <span className="text-xs font-mono font-bold bg-emerald-800 text-white px-3 py-1 rounded-full shadow-2xs">
-              AI Optimized Slot
-            </span>
-          </div>
-
-          {/* Timing comparison: Original vs Blackout vs Revised */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div className="bg-white/90 p-2.5 rounded-lg border border-gray-200">
-              <span className="text-[10px] text-gray-400 font-semibold block uppercase">
-                Original Requested
-              </span>
-              <span className="font-mono text-gray-500 line-through font-semibold text-xs">
-                {request.raw?.preferred_start_time || "19:00"} - {request.raw?.preferred_end_time || "21:00"}
-              </span>
-            </div>
-
-            <div className="bg-rose-50/90 p-2.5 rounded-lg border border-rose-200">
-              <span className="text-[10px] text-rose-600 font-bold block uppercase flex items-center gap-1">
-                <Ban size={11} /> Prohibited Blackout
-              </span>
-              <span className="font-mono text-rose-800 font-bold text-xs">
-                {prohibitedWindow?.startTime || "18:00"} - {prohibitedWindow?.endTime || "22:00"}
-              </span>
-            </div>
-
-            <div className="bg-emerald-100 p-2.5 rounded-lg border border-emerald-400 shadow-2xs">
-              <span className="text-[10px] text-emerald-800 font-extrabold block uppercase flex items-center gap-1">
-                <Clock size={11} className="text-emerald-700" /> New Revised Slot
-              </span>
-              <span className="font-mono text-emerald-950 font-black text-sm">
-                {recommendedBlock?.startTime || "22:15"} - {recommendedBlock?.endTime || "23:45"}
-              </span>
-            </div>
-          </div>
-
-          {/* Corridor & Safety Clearance Note */}
-          <div className="bg-white/95 p-2.5 rounded-lg border border-emerald-200 text-[11px] text-emerald-900 flex items-start gap-2">
-            <CheckCircle2 size={15} className="text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-emerald-950 block">Clear Corridor Possession Verified</span>
-              <p className="text-gray-600 mt-0.5">
-                {aiExplanation || `Scheduled possession window shifted to ${recommendedBlock?.startTime || "22:15"} - ${recommendedBlock?.endTime || "23:45"} strictly outside officer-designated restricted hours with zero passenger train delays.`}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Standard Conflict or Clear Corridor Display (Pre-Revision) */
-        hasConflict ? (
-          <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-3 text-xs space-y-1.5">
-            <div className="flex items-center gap-1.5 text-amber-900 font-bold">
-              <AlertTriangle size={15} className="text-amber-600" />
-              <span>Train Traffic Conflict Detected</span>
-            </div>
-            {conflictingTrains.length > 0 ? (
-              <div className="space-y-1 pl-4 border-l-2 border-amber-400 text-amber-800">
-                {conflictingTrains.map((t, idx) => (
-                  <div key={idx} className="flex items-center justify-between">
-                    <span className="font-semibold">{t.trainName || `Train ${t.trainNo}`}</span>
-                    <span className="font-mono text-[11px] bg-white/70 px-1.5 py-0.5 rounded">
-                      Slot: {t.arrival || t.arrivalTime || "19:15"} - {t.departure || t.departureTime || "19:22"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-amber-800">
-                Requested window overlaps with high-density express passenger timetable.
-              </p>
-            )}
-
-            {recommendedBlock && (
-              <p className="text-amber-900 font-medium pt-1 text-[11px] border-t border-amber-200/60">
-                💡 AI Recommended Window:{" "}
-                <span className="font-bold underline">
-                  {recommendedBlock.startTime} - {recommendedBlock.endTime}
-                </span>{" "}
-                (Zero passenger disruption)
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="bg-emerald-50/90 border border-emerald-200 rounded-lg p-3 text-xs space-y-1">
-            <div className="flex items-center gap-1.5 text-emerald-900 font-bold">
-              <CheckCircle2 size={15} className="text-emerald-600" />
-              <span>Clear Corridor Slot (Zero Train Conflict)</span>
-            </div>
-            {recommendedBlock && (
-              <div className="bg-white/80 p-2 rounded border border-emerald-200 font-mono text-xs font-bold text-emerald-900 flex items-center justify-between">
-                <span>Optimal Slot: {recommendedBlock.startTime} - {recommendedBlock.endTime}</span>
-                <span className="text-[10px] font-sans text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded">
-                  Score: {recommendedBlock.priorityScore || priorityScore}/100
-                </span>
-              </div>
-            )}
-            <p className="text-emerald-700 text-[11px]">
-              {aiExplanation || "Direct maintenance clearance verified across India timetable schedules."}
-            </p>
-          </div>
-        )
-      )}
-
-      {/* MCDA Priority Factor Breakdown Drawer */}
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowBreakdown(!showBreakdown)}
-          className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-[#b83825] transition-colors cursor-pointer"
-        >
-          <TrendingUp size={12} />
-          <span>MCDA Priority Factor Breakdown</span>
-          {showBreakdown ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        </button>
-
-        {showBreakdown && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100 text-[11px]">
-            <div>
-              <span className="text-gray-400">Safety Criticality:</span>
-              <p className="font-bold text-gray-800">{breakdown.safety || 95}%</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Track Urgency:</span>
-              <p className="font-bold text-gray-800">{breakdown.urgency || 80}%</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Failure Prob.:</span>
-              <p className="font-bold text-gray-800">{breakdown.failureProbability || 65}%</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Asset Condition:</span>
-              <p className="font-bold text-gray-800">{breakdown.criticality || 70}%</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Train Impact:</span>
-              <p className="font-bold text-gray-800">{breakdown.trainImpact || 60}%</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Asset Avail.:</span>
-              <p className="font-bold text-gray-800">{breakdown.assetAvailability || 85}%</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowAgentTrace((open) => !open)}
-          className="flex w-full items-center justify-between rounded-lg border border-[#e3e5e4] bg-[#f8f9f8] px-3 py-2.5 text-left transition-colors hover:border-[#d4d8d6] hover:bg-white"
-          aria-expanded={showAgentTrace}
-        >
-          <span>
-            <span className="block text-xs font-semibold text-[#171918]">Inspect agent decision trace</span>
-            <span className="mt-0.5 block text-[11px] text-gray-500">Inputs, evidence, scoring and human checkpoint</span>
-          </span>
-          {showAgentTrace ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-        {showAgentTrace && (
-          <div className="mt-2">
-            <AgentDecisionTrace
-              compact
-              requestId={request.id}
-              trackIds={traceTrackIds}
-              requestedWindow={{
-                startTime: request.raw?.preferred_start_time,
-                endTime: request.raw?.preferred_end_time,
-              }}
-              agentPlan={tracePlan}
-              status={request.status}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Operational Approval Options Preview */}
-      {alternatives.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-gray-600">
-            <span className="flex items-center gap-1 font-bold text-gray-700">
-              <Sparkles size={12} className="text-amber-500" />
-              Operational Approval Options ({alternatives.length}):
-            </span>
-            <span className="text-[10px] text-gray-400 font-medium">Select option to approve</span>
-          </div>
-          <div className="grid grid-cols-1 gap-1.5">
-            {alternatives.map((alt, idx) => {
-              const isSelected = selectedAltId === alt.id || selectedAltId === alt.type;
-              return (
-                <button
-                  type="button"
-                  key={alt.id || idx}
-                  onClick={() => handleOpenReview("APPROVED", alt)}
-                  className={`flex w-full cursor-pointer items-center justify-between rounded-lg border p-2.5 text-left text-xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
-                    isSelected
-                      ? "border-[#cf432c] bg-green-50/90 shadow-2xs ring-1 ring-[#cf432c]"
-                      : "border-gray-200 bg-white hover:border-green-400 hover:bg-green-50/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                        isSelected ? "bg-[#171918] text-white" : "bg-gray-100 text-gray-700"
-                      }`}
+      {showDetails && <div className="space-y-4 border-t border-[#dfe6e9] bg-[#f8fafb] p-4 sm:p-5">
+        <PlanExplanation details={request.agentPlan?.explanationDetails} requestedWindow={{ startTime: requestedStart, endTime: requestedEnd }} recommendedBlock={recommendedBlock} conflicts={conflictingTrains} />
+        <section aria-labelledby={`options-${request.id}`} className="rounded-xl border border-[#dce4e7] bg-white p-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><h4 id={`options-${request.id}`} className="font-semibold text-[#172630]">Ranked operational options</h4><p className="mt-1 text-sm text-[#667680]">Only verified, feasible options are shown.</p></div><span className="text-sm font-medium text-[#526570]">{alternatives.length} option{alternatives.length === 1 ? "" : "s"}</span></div>
+          {alternatives.length ? (
+            <div className="mt-3 space-y-2">
+              {alternatives.map((option, index) => (
+                <div key={option.id || option.type || index} className="rounded-lg border border-[#dce4e7] bg-white p-2 hover:border-[#8eabbc]">
+                  <button type="button" onClick={() => openReview("APPROVED", option)} disabled={!isVerifiedPlan} className={`flex min-h-11 w-full flex-col gap-2 rounded-md p-2 text-left hover:bg-[#f7fafb] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-row sm:items-center sm:justify-between ${focusRing}`}>
+                    <span className="flex min-w-0 items-start gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e7f0f4] text-xs font-bold text-[#315b75]">{option.rank || index + 1}</span><span><span className="block text-sm font-semibold text-[#203746]">{option.type}</span><span className="mt-0.5 block text-sm leading-5 text-[#5f707b]">{option.description}</span></span></span>
+                    <span className="shrink-0 text-sm font-medium text-[#536a77]">{option.trainImpact || (option.delayMinutes === 0 ? "No delay" : `+${option.delayMinutes || 0} min`)}</span>
+                  </button>
+                  {option.type === "REROUTE" && option.routeGeometry?.coordinates?.length > 1 && trackIds[0] && (
+                    <Link
+                      to={`/officer/live-map?preview=reroute&track=${encodeURIComponent(trackIds[0])}&request=${encodeURIComponent(request.id)}&extraKm=${encodeURIComponent(String(option.trainImpact || option.description).match(/\+?(\d+(?:\.\d+)?)\s*km/i)?.[1] || 14)}&delay=${encodeURIComponent(option.delayMinutes || 20)}`}
+                      state={{ trackId: trackIds[0], requestId: request.id, detourAlternative: option }}
+                      className={`mt-1 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-violet-50 px-3 text-sm font-semibold text-violet-800 hover:bg-violet-100 ${focusRing}`}
                     >
-                      {alt.type}
-                    </span>
-                    <span className="text-gray-800 text-[11px] line-clamp-1 font-medium">
-                      {alt.description}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className="text-[10px] font-semibold text-green-700">
-                      {alt.trainImpact || (alt.delayMinutes === 0 ? "0 delay" : `+${alt.delayMinutes}m delay`)}
-                    </span>
-                    {isSelected && (
-                      <span className="text-[9px] font-bold bg-green-700 text-white px-1.5 py-0.5 rounded">
-                        ✓ Selected
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Decision Buttons */}
-      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-        <button
-          onClick={() => handleOpenReview("APPROVED")}
-          className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-[#171918] py-2.5 text-xs font-semibold text-white shadow-2xs transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
-        >
-          <CheckCircle2 size={14} /> Approve Plan
-        </button>
-        <button
-          onClick={() => handleOpenReview("REVISION_REQUIRED")}
-          className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-amber-600 py-2.5 text-xs font-semibold text-white shadow-2xs transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-amber-700 active:scale-[0.96]"
-        >
-          <Sliders size={14} /> Modify Plan
-        </button>
-        <button
-          onClick={() => handleOpenReview("REJECTED")}
-          className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 transition-[color,background-color,border-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-red-100 active:scale-[0.96]"
-        >
-          Decline
-        </button>
-      </div>
-
-      {/* Officer Decision & Alternative Selection Modal */}
-      {showReviewModal && (
-        <Modal onClose={() => setShowReviewModal(false)} maxWidth="max-w-lg">
-          <form
-            onSubmit={handleSubmitReview}
-            className="max-h-[80vh] overflow-y-auto pr-1 text-sm"
-          >
-            <div className="mb-2 flex items-center justify-between pr-10">
-              <h3 className="text-base font-bold text-gray-900">
-                Officer Block Decision & Review
-              </h3>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">
-              Action: <span className="font-bold text-[#b83825]">{decisionType}</span> for{" "}
-              <span className="font-mono font-bold text-gray-800">{request.id}</span>
-            </p>
-
-            {/* If Modifying / Revision Required: Display Select Prohibited Time Field */}
-            {decisionType === "REVISION_REQUIRED" && (
-              <div className="mb-4 bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Ban size={16} className="text-rose-600 shrink-0" />
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                      Select Prohibited Time Window (Block Cannot Be Planned)
-                    </h4>
-                    <p className="text-[11px] text-gray-600 mt-0.5">
-                      Choose the hours during which corridor track block is strictly prohibited.
-                      The entire block plan will be recalculated outside this window.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Time Selection Fields */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label htmlFor={`${request.id}-prohibited-start`} className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                      <Clock size={12} className="text-amber-700" />
-                      Prohibited From Time:
-                    </label>
-                    <input
-                      type="time"
-                      id={`${request.id}-prohibited-start`}
-                      value={prohibitedStartTime}
-                      onChange={(e) => {
-                        const newStart = e.target.value;
-                        setProhibitedStartTime(newStart);
-                        setFeedback(`Corridor possession prohibited between ${newStart} and ${prohibitedEndTime}. Requesting entire block plan revision.`);
-                      }}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-gray-900 outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 shadow-2xs"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`${request.id}-prohibited-end`} className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                      <Clock size={12} className="text-amber-700" />
-                      Prohibited Until Time:
-                    </label>
-                    <input
-                      type="time"
-                      id={`${request.id}-prohibited-end`}
-                      value={prohibitedEndTime}
-                      onChange={(e) => {
-                        const newEnd = e.target.value;
-                        setProhibitedEndTime(newEnd);
-                        setFeedback(`Corridor possession prohibited between ${prohibitedStartTime} and ${newEnd}. Requesting entire block plan revision.`);
-                      }}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-gray-900 outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 shadow-2xs"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Quick select presets */}
-                <div>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
-                    Quick Window Presets:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { label: "Evening Peak (18:00 - 22:00)", start: "18:00", end: "22:00" },
-                      { label: "Morning Rush (07:00 - 10:30)", start: "07:00", end: "10:30" },
-                      { label: "Afternoon Express (13:00 - 16:30)", start: "13:00", end: "16:30" },
-                      {
-                        label: `Current Window (${request.raw?.preferred_start_time || "19:00"} - ${request.raw?.preferred_end_time || "21:00"})`,
-                        start: request.raw?.preferred_start_time || "19:00",
-                        end: request.raw?.preferred_end_time || "21:00",
-                      },
-                    ].map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => {
-                          setProhibitedStartTime(preset.start);
-                          setProhibitedEndTime(preset.end);
-                          setFeedback(`Corridor possession prohibited between ${preset.start} and ${preset.end}. Requesting entire block plan revision.`);
-                        }}
-                        className={`cursor-pointer rounded-md border px-2 py-1 text-[10px] font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
-                          prohibitedStartTime === preset.start && prohibitedEndTime === preset.end
-                            ? "bg-amber-600 text-white border-amber-600 shadow-2xs font-semibold"
-                            : "bg-white text-gray-700 border-gray-200 hover:bg-amber-100/50"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Real-Time Calculated Revised Block Plan Preview */}
-                {(() => {
-                  const preview = computeRevisedPreview(
-                    prohibitedStartTime,
-                    prohibitedEndTime,
-                    Number(request.raw?.estimated_duration_minutes || 90)
-                  );
-                  if (!preview) return null;
-                  return (
-                    <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3 space-y-2 mt-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
-                          <Sparkles size={14} className="text-amber-500" />
-                          Calculated Revised Block Plan:
-                        </span>
-                        <span className="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
-                          Zero Conflict Slot
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-lg border border-emerald-200">
-                        <Clock size={16} className="text-emerald-700 shrink-0" />
-                        <div>
-                          <span className="text-[10px] text-gray-400 font-semibold block uppercase">
-                            New Scheduled Block Window
-                          </span>
-                          <span className="font-mono font-bold text-base text-emerald-950">
-                            {preview.startTime} - {preview.endTime}
-                          </span>
-                          <span className="text-xs text-gray-500 ml-2 font-medium">
-                            ({request.raw?.estimated_duration_minutes || 90} mins)
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-[11px] text-emerald-800 space-y-0.5">
-                        <p>✓ Avoids prohibited blackout window ({prohibitedStartTime} - {prohibitedEndTime}).</p>
-                        <p>✓ AI verifies clean corridor clearance across all train timetable movements.</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* MANDATORY ALTERNATIVE SELECTION FOR PLAN APPROVAL */}
-            {decisionType === "APPROVED" && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-gray-900 uppercase tracking-wider">
-                    {hasConflict ? "Select Operational Option (Mandatory for Approval):" : "Sanctioned Operational Option:"}
-                  </label>
-                  {hasConflict && (
-                    <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                      Selection Required *
-                    </span>
+                      <MapPin size={16} aria-hidden="true" /> Preview detour on map
+                    </Link>
                   )}
                 </div>
-                <p className="text-[11px] text-gray-500 mb-2.5">
-                  {hasConflict
-                    ? "Before sanctioning the block plan, you must select one of the operational execution alternatives (Reschedule, Reroute, or Delay):"
-                    : "The requested window is free of train clashes. Confirm direct clearance execution:"}
-                </p>
-
-                <div className="space-y-2">
-                  {alternatives.map((alt) => {
-                    const isSelected = selectedAltId === alt.id || selectedAltId === alt.type;
-                    return (
-                      <button
-                        type="button"
-                        key={alt.id || alt.type}
-                        onClick={() => handleSelectAlternative(alt)}
-                        className={`w-full cursor-pointer rounded-xl border-2 p-3 text-left text-xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
-                          isSelected
-                            ? "border-[#cf432c] bg-green-50/90 shadow-xs ring-2 ring-green-500/20"
-                            : "border-gray-200 hover:border-gray-300 bg-white"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between font-bold mb-1">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                isSelected
-                                  ? "border-[#cf432c] bg-green-600 text-white"
-                                  : "border-gray-300"
-                              }`}
-                            >
-                              {isSelected && <CheckCircle2 size={12} />}
-                            </div>
-                            <span className="text-[#8f2c1f] font-mono font-bold text-xs">
-                              {alt.type} {alt.rank ? `(Rank #${alt.rank})` : ""}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-600 font-semibold">
-                            Score: {alt.priorityScore || 75}/100
-                          </span>
-                        </div>
-                        <p className="text-gray-800 text-xs pl-6">{alt.description}</p>
-                        <span className="text-[10px] text-amber-700 font-semibold block mt-1.5 pl-6">
-                          Operational Impact: {alt.trainImpact || "Negligible"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {!selectedAltId && hasConflict && (
-                  <div className="mt-2.5 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800 flex items-center gap-2">
-                    <AlertCircle size={15} className="text-amber-600 shrink-0" />
-                    <span>Please click an option above (Reschedule, Reroute, or Delay) to enable plan approval.</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <label htmlFor={`${request.id}-feedback`} className="block text-xs font-semibold text-gray-700 mb-1">
-              Operational Directives & Written Feedback
-            </label>
-            <textarea
-              id={`${request.id}-feedback`}
-              rows={3}
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:border-[#cf432c] focus:ring-1 focus:ring-[#cf432c]"
-              placeholder="Provide directives for maintenance team and control office..."
-              required
-            />
-
-            <div className="flex justify-end gap-2 mt-5">
-              <button
-                type="button"
-                onClick={() => setShowReviewModal(false)}
-                className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={decisionType === "APPROVED" && !selectedAltId}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors flex items-center gap-1.5 ${
-                  decisionType === "REVISION_REQUIRED"
-                    ? "bg-amber-600 hover:bg-amber-700 cursor-pointer"
-                    : decisionType === "APPROVED" && !selectedAltId
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed opacity-70"
-                    : "bg-[#171918] hover:bg-black cursor-pointer shadow-xs"
-                }`}
-              >
-                {decisionType === "REVISION_REQUIRED" ? (
-                  <>
-                    <Sparkles size={14} />
-                    <span>Revise Entire Block Plan</span>
-                  </>
-                ) : decisionType === "APPROVED" ? (
-                  <>
-                    <CheckCircle2 size={14} />
-                    <span>
-                      {selectedAltId
-                        ? `Approve Plan (${selectedAlt?.type || "Selected Option"})`
-                        : "Select Option to Approve"}
-                    </span>
-                  </>
-                ) : (
-                  <span>Confirm Decision</span>
-                )}
-              </button>
+              ))}
             </div>
-          </form>
-        </Modal>
-      )}
-    </div>
+          ) : <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">No verified operational options are available.</p>}
+        </section>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="rounded-xl border border-[#dce4e7] bg-white p-4" aria-labelledby={`factors-${request.id}`}><h4 id={`factors-${request.id}`} className="font-semibold text-[#172630]">Priority factors</h4><dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-3 text-sm">{[["Safety", breakdown.safety], ["Urgency", breakdown.urgency], ["Failure probability", breakdown.failureProbability], ["Asset condition", breakdown.criticality], ["Train impact", breakdown.trainImpact], ["Asset availability", breakdown.assetAvailability]].map(([label, value]) => <div key={label}><dt className="text-[#667680]">{label}</dt><dd className="mt-0.5 font-semibold text-[#263a47]">{value ?? "—"}{value != null ? "%" : ""}</dd></div>)}</dl></section>
+          <section className="rounded-xl border border-[#dce4e7] bg-white p-4" aria-labelledby={`traffic-${request.id}`}><h4 id={`traffic-${request.id}`} className="font-semibold text-[#172630]">Timetable evidence</h4>{conflictingTrains.length ? <ul className="mt-3 space-y-2">{conflictingTrains.map((train, index) => <li key={train.trainNo || index} className="flex items-start gap-2 text-sm text-[#536570]"><TrainFront size={16} className="mt-0.5 shrink-0 text-amber-700" aria-hidden="true" /><span><strong className="font-semibold text-[#263a47]">{train.trainName || `Train ${train.trainNo}`}</strong><br />{windowText(train.arrival || train.arrivalTime, train.departure || train.departureTime)}</span></li>)}</ul> : <p className="mt-2 text-sm leading-5 text-[#5f707b]">No conflicting train movement is listed for this plan.</p>}</section>
+        </div>
+        <section><button type="button" onClick={() => setShowTrace((open) => !open)} aria-expanded={showTrace} className={`flex min-h-11 w-full items-center justify-between rounded-lg border border-[#dce4e7] bg-white px-4 text-left text-sm font-semibold text-[#29485e] hover:bg-[#f4f8fa] ${focusRing}`}><span>Agent handoff record</span>{showTrace ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}</button>{showTrace && <div className="mt-2"><AgentDecisionTrace compact requestId={request.id} trackIds={trackIds} requestedWindow={{ startTime: requestedStart, endTime: requestedEnd }} agentPlan={tracePlan} status={request.status} /></div>}</section>
+      </div>}
+
+      {showReviewModal && <Modal title={decisionType === "APPROVED" ? "Approve a plan" : decisionType === "REVISION_REQUIRED" ? "Request a modified plan" : "Decline request"} onClose={() => setShowReviewModal(false)} maxWidth="max-w-xl">
+        <form onSubmit={submitReview} className="max-h-[75vh] overflow-y-auto pr-1 text-base"><p className="mb-5 text-sm leading-5 text-[#61727d]">Case <span className="font-mono font-semibold text-[#263a47]">{request.id}</span>. Review the information below before confirming.</p>
+          {decisionType === "APPROVED" && <fieldset><legend className="font-semibold text-[#172630]">Operational option</legend><p className="mt-1 text-sm text-[#657680]">Choose one option. This selection becomes part of the decision record.</p><div className="mt-3 space-y-2">{alternatives.map((option, index) => { const id = option.id || option.type; const selected = selectedAltId === id; return <label key={id || index} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${selected ? "border-[#315b75] bg-[#eef5f8]" : "border-[#dce4e7] hover:bg-[#f8fafb]"}`}><input type="radio" name={`alternative-${request.id}`} value={id} checked={selected} onChange={() => selectAlternative(option)} className="mt-1 size-4 accent-[#315b75]" /><span><span className="block text-sm font-semibold text-[#203746]">{option.type}</span><span className="mt-0.5 block text-sm leading-5 text-[#5f707b]">{option.description}</span></span></label>; })}</div></fieldset>}
+          {decisionType === "REVISION_REQUIRED" && <fieldset className="rounded-xl border border-amber-200 bg-amber-50 p-4"><legend className="px-1 font-semibold text-amber-950">Prohibited period</legend><p className="text-sm leading-5 text-amber-900">The planner will search for a verified possession window outside these hours.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-[#3c4d58]">From<input type="time" value={prohibitedStartTime} onChange={(event) => { setProhibitedStartTime(event.target.value); setFeedback(`Do not schedule possession between ${event.target.value} and ${prohibitedEndTime}. Generate a new verified plan outside this period.`); }} className={`mt-1 min-h-11 w-full rounded-lg border border-[#bfcbd1] bg-white px-3 font-mono text-base ${focusRing}`} required /></label><label className="text-sm font-medium text-[#3c4d58]">Until<input type="time" value={prohibitedEndTime} onChange={(event) => { setProhibitedEndTime(event.target.value); setFeedback(`Do not schedule possession between ${prohibitedStartTime} and ${event.target.value}. Generate a new verified plan outside this period.`); }} className={`mt-1 min-h-11 w-full rounded-lg border border-[#bfcbd1] bg-white px-3 font-mono text-base ${focusRing}`} required /></label></div>{revisedPreview && <div className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-white p-3 text-sm text-emerald-900"><Sparkles size={17} className="mt-0.5 shrink-0" aria-hidden="true" /><span><strong>Earliest search point:</strong> {windowText(revisedPreview.startTime, revisedPreview.endTime)}. The agent will verify constraints after submission.</span></div>}</fieldset>}
+          {decisionType === "REJECTED" && <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900"><Ban size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>This closes the request. Give the requesting team a clear reason below.</span></div>}
+          <label htmlFor={`${request.id}-feedback`} className="mt-5 block text-sm font-semibold text-[#263a47]">Reason or instructions</label><textarea id={`${request.id}-feedback`} rows={4} value={feedback} onChange={(event) => { setFeedback(event.target.value); setFormError(""); }} placeholder={decisionType === "REJECTED" ? "Explain why this request cannot proceed…" : "Add instructions for the maintenance and control teams…"} className={`mt-1 w-full rounded-lg border border-[#bfcbd1] p-3 text-base leading-6 ${focusRing}`} aria-describedby={formError ? `${request.id}-form-error` : undefined} required />{formError && <p id={`${request.id}-form-error`} role="alert" className="mt-2 flex items-center gap-2 text-sm font-medium text-red-700"><AlertTriangle size={16} aria-hidden="true" />{formError}</p>}
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowReviewModal(false)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-[#526570] hover:bg-[#f0f4f5] ${focusRing}`}>Cancel</button><button type="submit" disabled={decisionType === "APPROVED" && (!selectedAltId || !isVerifiedPlan)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white ${focusRing} ${decisionType === "REVISION_REQUIRED" ? "bg-amber-700 hover:bg-amber-800" : decisionType === "REJECTED" ? "bg-red-700 hover:bg-red-800" : selectedAltId && isVerifiedPlan ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}>{decisionType === "APPROVED" ? <CheckCircle2 size={17} aria-hidden="true" /> : decisionType === "REVISION_REQUIRED" ? <Route size={17} aria-hidden="true" /> : <Ban size={17} aria-hidden="true" />}{decisionType === "APPROVED" ? `Approve ${selectedAlternative?.type || "selected option"}` : decisionType === "REVISION_REQUIRED" ? "Generate revised plan" : "Confirm decline"}</button></div>
+        </form>
+      </Modal>}
+    </article>
   );
 }

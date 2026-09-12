@@ -9,6 +9,8 @@ Responsibilities:
 import re
 
 class MaintenanceAgent:
+    VERSION = "maintenance-rules@2.0.0"
+
     def analyze(self, raw_request: dict) -> dict:
         task_id = raw_request.get("taskId") or raw_request.get("requestId") or "MT-1001"
         track_id = (raw_request.get("trackId") or "KA-T-000342").upper()
@@ -50,6 +52,8 @@ class MaintenanceAgent:
             "department": department,
             "assetType": asset_type,
             "durationMinutes": duration,
+            "requestedStartTime": raw_request.get("startTime") or "19:00",
+            "requestedEndTime": raw_request.get("endTime") or "20:30",
             "criticality": min(max(criticality, 0), 100),
             "urgency": min(max(urgency, 0), 100),
             "failureProbability": min(max(failure_prob, 0), 100),

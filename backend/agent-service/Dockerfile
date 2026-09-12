@@ -7,11 +7,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY agent-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy microservice code
-COPY . .
+COPY agent-service/ .
+COPY data/karnataka_tracks.geojson /app/data/karnataka_tracks.geojson
 
 EXPOSE 5001
 

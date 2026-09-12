@@ -2,9 +2,17 @@
 const { fallbackStore } = require("../config/database");
 const { callPythonAgentService } = require("./agent.service");
 const { persistLocalStore } = require("./local-store.service");
+const { recordAgentRun } = require("./agent-run.service");
 
 async function enrichRequestWithAgentPlan(req) {
-  if (req.agent_plan && req.alternatives && req.alternatives.length > 0) {
+  const existingPlan = req.agent_plan;
+  const traceVersions = new Set((existingPlan?.trace || []).map((step) => step.implementationVersion));
+  const hasNetworkAwarePlan = traceVersions.has("traffic-rules@2.1.0") && traceVersions.has("block-planner@2.1.0");
+  const isAwaitingDecision = ["SUBMITTED", "UNDER_REVIEW"].includes(req.status);
+
+  // Preserve completed decisions and current plans. Only pending legacy plans
+  // are refreshed so route geometry can be computed without rewriting history.
+  if (existingPlan && (!isAwaitingDecision || hasNetworkAwarePlan)) {
     return req;
   }
 
@@ -20,18 +28,20 @@ async function enrichRequestWithAgentPlan(req) {
       endTime: req.preferred_end_time || "20:30",
       durationMinutes: req.estimated_duration_minutes || 120,
     });
+    if (existingPlan && agentPlan?.status === "DEGRADED") return req;
+    recordAgentRun(agentPlan, req.request_id);
 
     req.agent_plan = agentPlan;
-    req.priority_score = agentPlan?.priorityScore || 75;
-    req.conflict = Boolean(agentPlan?.conflict);
+    req.priority_score = agentPlan?.priorityScore ?? (agentPlan?.schemaVersion === "2.0" ? null : 75);
+    req.conflict = agentPlan?.conflict ?? null;
     req.conflicting_trains = agentPlan?.conflictingTrains || [];
-    req.recommended_block = agentPlan?.recommendedBlock || {
+    req.recommended_block = agentPlan?.schemaVersion === "2.0" ? agentPlan.recommendedBlock : (agentPlan?.recommendedBlock || {
       date: req.requested_date || req.from_date || "2026-09-15",
       startTime: req.preferred_start_time || "19:00",
       endTime: req.preferred_end_time || "20:30",
       trackId: primaryTrackId,
       priorityScore: agentPlan?.priorityScore || 75,
-    };
+    });
     req.ai_explanation = agentPlan?.explanation || "Multi-agent block planning analysis completed.";
     req.alternatives = agentPlan?.alternatives || [];
 
@@ -118,6 +128,7 @@ async function createRequest(userId, payload) {
       failureProbability: payload.failureProbability,
       overdueDays: payload.overdueDays,
     });
+    recordAgentRun(agentPlan, requestId);
   } catch (err) {
     console.warn("Python agent service execution error during createRequest:", err.message);
   }
@@ -142,16 +153,16 @@ async function createRequest(userId, payload) {
     required_block: payload.required_block !== undefined ? payload.required_block : (payload.requiredBlock !== undefined ? payload.requiredBlock : true),
     status: payload.status || "SUBMITTED",
     agent_plan: agentPlan,
-    priority_score: agentPlan?.priorityScore || 75,
-    conflict: Boolean(agentPlan?.conflict),
+    priority_score: agentPlan?.priorityScore ?? (agentPlan?.schemaVersion === "2.0" ? null : 75),
+    conflict: agentPlan?.conflict ?? null,
     conflicting_trains: agentPlan?.conflictingTrains || [],
-    recommended_block: agentPlan?.recommendedBlock || {
+    recommended_block: agentPlan?.schemaVersion === "2.0" ? agentPlan.recommendedBlock : (agentPlan?.recommendedBlock || {
       date: fromDate,
       startTime,
       endTime,
       trackId: primaryTrackId,
       priorityScore: agentPlan?.priorityScore || 75,
-    },
+    }),
     ai_explanation: agentPlan?.explanation || "Multi-agent block planning analysis completed.",
     alternatives: agentPlan?.alternatives || [],
     officer_feedback: null,
@@ -192,6 +203,18 @@ async function reviewRequest(requestId, officerId, decision, feedback, alternati
     throw { statusCode: 404, code: "REQUEST_NOT_FOUND", message: `Request ${requestId} not found` };
   }
 
+  if (
+    decision === "APPROVED" &&
+    req.agent_plan?.schemaVersion === "2.0" &&
+    req.agent_plan?.verification?.passed !== true
+  ) {
+    throw {
+      statusCode: 409,
+      code: "PLAN_NOT_VERIFIED",
+      message: "This plan cannot be approved because hard-constraint verification did not pass.",
+    };
+  }
+
   // Update request status based on officer decision
   if (decision === "APPROVED") {
     req.status = "APPROVED";
@@ -225,6 +248,7 @@ async function reviewRequest(requestId, officerId, decision, feedback, alternati
         prohibitedStartTime: prohibitedWindow.startTime,
         prohibitedEndTime: prohibitedWindow.endTime,
       });
+      recordAgentRun(revisedPlan, req.request_id);
 
       if (revisedPlan) {
         req.agent_plan = revisedPlan;

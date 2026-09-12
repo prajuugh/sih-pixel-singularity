@@ -22,6 +22,7 @@ This single-command workflow spins up all 3 services inside isolated Docker cont
    cp .env.example .env
    ```
    *(Ensure `DATABASE_URL` is set to your Supabase PostgreSQL connection string or self-hosted database).*
+   To enable the grounded DeepSeek Explanation Agent through OpenRouter, set `OPENROUTER_API_KEY` in `.env`. Without it, verified plans use a clearly labeled deterministic explanation fallback.
 
 2. **Build and start all containers**:
    ```bash
@@ -72,6 +73,9 @@ This single-command workflow spins up all 3 services inside isolated Docker cont
    - **`rbps-backend`** (Node Express API)
 5. Under `rbps-backend` Environment Variables, add:
    - `DATABASE_URL`: `[Your Supabase postgres connection string]`
+6. Under `rbps-agent-service` Environment Variables, optionally add:
+   - `OPENROUTER_API_KEY`: your server-side OpenRouter API key
+   - `OPENROUTER_EXPLANATION_MODEL`: `deepseek/deepseek-chat`
 6. Once deployed, Render will provide a public URL for your backend (e.g. `https://rbps-backend.onrender.com`).
 
 ---

@@ -1,23 +1,32 @@
-// frontend/src/pages/officer/OfficerRequests.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardCheck, RotateCw, CheckCircle2, Clock, AlertCircle, ArrowRight, FileCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, FileCheck, RefreshCw, RotateCcw } from "lucide-react";
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import RequestCard from "../../components/officer/RequestCard";
 import { fetchRequests, updateRequestStatus } from "../../utils/api";
 
+const FILTERS = [
+  { value: "ALL", label: "All", icon: ClipboardCheck },
+  { value: "READY", label: "Ready", icon: CheckCircle2 },
+  { value: "CONFLICT", label: "Conflicts", icon: AlertTriangle },
+  { value: "REVISION", label: "Revised", icon: RotateCcw },
+];
+
 export default function OfficerRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [queueFilter, setQueueFilter] = useState("ALL");
 
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const data = await fetchRequests();
-      setRequests(data);
+      setRequests(await fetchRequests());
+      setError("");
     } catch (err) {
       console.error(err);
+      setError("The request queue could not be refreshed. Your current view is unchanged.");
     } finally {
       setLoading(false);
     }
@@ -25,20 +34,22 @@ export default function OfficerRequests() {
 
   useEffect(() => {
     let active = true;
-    const refreshQueue = () => {
-      fetchRequests()
-        .then((data) => {
-          if (active) setRequests(data);
-        })
-        .catch((err) => console.error("Could not refresh request queue:", err))
-        .finally(() => {
-          if (active) setLoading(false);
-        });
+    const refreshQueue = async () => {
+      try {
+        const data = await fetchRequests();
+        if (active) {
+          setRequests(data);
+          setError("");
+        }
+      } catch (err) {
+        console.error("Could not refresh request queue:", err);
+        if (active) setError("The request queue could not be refreshed. Your current view is unchanged.");
+      } finally {
+        if (active) setLoading(false);
+      }
     };
     refreshQueue();
-    const interval = window.setInterval(() => {
-      refreshQueue();
-    }, 5000);
+    const interval = window.setInterval(refreshQueue, 5000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -46,165 +57,108 @@ export default function OfficerRequests() {
   }, []);
 
   const handleDecision = async (request, decisionType, feedback, alternativeId = null, prohibitedWindow = null) => {
-    const statusMap = {
-      APPROVED: "Approved",
-      REVISION_REQUIRED: "AI Processing",
-      REJECTED: "Declined",
-    };
+    const statusMap = { APPROVED: "Approved", REVISION_REQUIRED: "AI Processing", REJECTED: "Declined" };
     const newStatus = statusMap[decisionType] || decisionType;
-
     const result = await updateRequestStatus(request.id, newStatus, decisionType, feedback, alternativeId, prohibitedWindow);
 
-    if (result && result.data && result.data.request) {
-      const updatedReq = result.data.request;
-      setRequests((prev) =>
-        prev.map((r) => {
-          if (r.id === request.id) {
-            return {
-              ...r,
-              status: updatedReq.status === "REVISION_REQUIRED" ? "AI Processing" : (statusMap[updatedReq.status] || updatedReq.status),
-              reason: updatedReq.officer_feedback || feedback,
-              agentPlan: updatedReq.agent_plan,
-              priorityScore: updatedReq.priority_score ?? updatedReq.agent_plan?.priorityScore ?? r.priorityScore,
-              conflict: updatedReq.conflict !== undefined ? updatedReq.conflict : r.conflict,
-              conflictingTrains: updatedReq.conflicting_trains || updatedReq.agent_plan?.conflictingTrains || [],
-              recommendedBlock: updatedReq.recommended_block || updatedReq.agent_plan?.recommendedBlock || r.recommendedBlock,
-              aiExplanation: updatedReq.ai_explanation || updatedReq.agent_plan?.explanation || r.aiExplanation,
-              alternatives: updatedReq.alternatives || updatedReq.agent_plan?.alternatives || r.alternatives,
-              raw: updatedReq,
-              prohibitedWindow: updatedReq.prohibited_window || prohibitedWindow,
-            };
-          }
-          return r;
-        })
-      );
-    } else {
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === request.id
-            ? { ...r, status: newStatus, reason: feedback, prohibitedWindow }
-            : r
-        )
-      );
+    if (result?.data?.request) {
+      const updated = result.data.request;
+      setRequests((previous) => previous.map((item) => item.id === request.id ? {
+        ...item,
+        status: updated.status === "REVISION_REQUIRED" ? "AI Processing" : (statusMap[updated.status] || updated.status),
+        reason: updated.officer_feedback || feedback,
+        agentPlan: updated.agent_plan,
+        priorityScore: updated.priority_score ?? updated.agent_plan?.priorityScore ?? item.priorityScore,
+        conflict: updated.conflict !== undefined ? updated.conflict : item.conflict,
+        conflictingTrains: updated.conflicting_trains || updated.agent_plan?.conflictingTrains || [],
+        recommendedBlock: updated.recommended_block || updated.agent_plan?.recommendedBlock || item.recommendedBlock,
+        aiExplanation: updated.ai_explanation || updated.agent_plan?.explanation || item.aiExplanation,
+        alternatives: updated.alternatives || updated.agent_plan?.alternatives || item.alternatives,
+        raw: updated,
+        prohibitedWindow: updated.prohibited_window || prohibitedWindow,
+      } : item));
+      return;
     }
+    setRequests((previous) => previous.map((item) => item.id === request.id ? { ...item, status: newStatus, reason: feedback, prohibitedWindow } : item));
   };
 
-  // Filter ONLY pending / actionable requests (exclude Approved & Completed)
-  const pendingRequests = requests.filter((r) => {
-    const isApproved =
-      r.status === "Approved" ||
-      r.status === "Completed" ||
-      r.raw?.status === "APPROVED" ||
-      r.raw?.status === "COMPLETED";
-    return !isApproved;
-  });
+  const pendingRequests = useMemo(() => requests.filter((request) => ![
+    "Approved", "Completed", "APPROVED", "COMPLETED",
+  ].includes(request.raw?.status || request.status)), [requests]);
 
-  const pendingCount = pendingRequests.filter((r) => r.status === "Waiting for Approval").length;
-  const approvedCount = requests.filter((r) => r.status === "Approved" || r.raw?.status === "APPROVED").length;
-  const revisionCount = pendingRequests.filter((r) => r.status === "AI Processing").length;
+  const counts = useMemo(() => ({
+    ALL: pendingRequests.length,
+    READY: pendingRequests.filter((request) => !request.conflict && !request.conflictingTrains?.length).length,
+    CONFLICT: pendingRequests.filter((request) => request.conflict || request.conflictingTrains?.length).length,
+    REVISION: pendingRequests.filter((request) => ["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status)).length,
+    APPROVED: requests.filter((request) => ["Approved", "APPROVED"].includes(request.raw?.status || request.status)).length,
+  }), [pendingRequests, requests]);
+
+  const visibleRequests = useMemo(() => pendingRequests
+    .filter((request) => {
+      const conflict = request.conflict || request.conflictingTrains?.length;
+      if (queueFilter === "CONFLICT") return Boolean(conflict);
+      if (queueFilter === "REVISION") return ["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status);
+      if (queueFilter === "READY") return !conflict;
+      return true;
+    })
+    .sort((a, b) => (b.priorityScore ?? b.agentPlan?.priorityScore ?? 0) - (a.priorityScore ?? a.agentPlan?.priorityScore ?? 0)),
+  [pendingRequests, queueFilter]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-[#f5f7f8]">
       <Navbar />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="min-w-0 flex-1 p-4 pb-20 md:p-6 md:pb-6 xl:p-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <ClipboardCheck className="text-[#b83825]" size={24} />
-                <h2 className="text-2xl font-bold text-gray-900">Officer Maintenance Requests Review</h2>
+        <main className="min-w-0 flex-1 p-4 pb-20 md:p-6 md:pb-8 xl:p-8">
+          <div className="mx-auto max-w-5xl">
+            <header className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div>
+                <p className="mb-1 text-sm font-semibold text-[#49677d]">Officer planning desk</p>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#172630]">Possession requests</h1>
+                <p className="mt-2 max-w-2xl text-base leading-6 text-[#5f6f79]">Review the highest-priority request first, check its evidence, then approve, modify, or decline it.</p>
               </div>
-              <p className="text-gray-500 text-sm">
-                Review incoming department maintenance requests, inspect train conflicts, and issue operational approvals or rescheduling directives.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <Link
-                to="/officer/approved-requests"
-                className="flex items-center gap-1.5 rounded-lg border border-[#efc5bd] bg-[#fff5f2] px-3.5 py-2 text-xs font-semibold text-[#b83825] transition-[color,background-color,border-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[#fbeae7] active:scale-[0.96]"
-              >
-                <CheckCircle2 size={14} className="text-green-600" />
-                <span>Approved Requests ({approvedCount})</span>
-                <ArrowRight size={13} />
-              </Link>
-              <button
-                onClick={loadRequests}
-                disabled={loading}
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 shadow-2xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:border-green-300 hover:text-[#b83825] active:scale-[0.96]"
-              >
-                <RotateCw size={14} className={loading ? "animate-spin" : ""} />
-                <span>Refresh</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Metric Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white border border-gray-100 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-xs text-gray-500 font-medium">Pending Queue</span>
-              <p className="text-xl font-bold text-gray-900 mt-0.5">{pendingRequests.length}</p>
-            </div>
-            <div className="bg-white border border-gray-100 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
-                <Clock size={12} /> Waiting for Approval
-              </span>
-              <p className="text-xl font-bold text-blue-800 mt-0.5">{pendingCount}</p>
-            </div>
-            <Link
-              to="/officer/approved-requests"
-              className="bg-white border border-green-100 rounded-xl p-3.5 shadow-2xs hover:border-green-300 transition-colors block group"
-            >
-              <span className="text-xs text-green-600 font-medium flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 size={12} /> Approved (Moved)
-                </span>
-                <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-              </span>
-              <p className="text-xl font-bold text-[#b83825] mt-0.5">{approvedCount}</p>
-            </Link>
-            <div className="bg-white border border-gray-100 rounded-xl p-3.5 shadow-2xs">
-              <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
-                <AlertCircle size={12} /> Reschedule / Revision
-              </span>
-              <p className="text-xl font-bold text-amber-800 mt-0.5">{revisionCount}</p>
-            </div>
-          </div>
-
-          {pendingRequests.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-12 text-center text-gray-500">
-              <FileCheck size={44} className="mx-auto text-green-700 mb-3" />
-              <p className="font-semibold text-gray-800 text-lg">No Pending Requests in Queue</p>
-              <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
-                All submitted requests have been reviewed and approved or resolved. Approved requests are safely organized in the Approved Requests portal.
-              </p>
-              <div className="mt-5">
-                <Link
-                  to="/officer/approved-requests"
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#171918] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
-                >
-                  <CheckCircle2 size={15} />
-                  <span>View All Approved Requests ({approvedCount})</span>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/officer/approved-requests" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#cbd6dc] bg-white px-4 text-sm font-semibold text-[#29485e] hover:bg-[#f8fbfc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] focus-visible:ring-offset-2">
+                  <CheckCircle2 size={17} aria-hidden="true" /> Released <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">{counts.APPROVED}</span>
                 </Link>
+                <button type="button" onClick={loadRequests} disabled={loading} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#315b75] px-4 text-sm font-semibold text-white hover:bg-[#25485e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">
+                  <RefreshCw size={17} className={loading ? "animate-spin" : ""} aria-hidden="true" /> {loading ? "Refreshing…" : "Refresh"}
+                </button>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {pendingRequests.map((request) => (
-                <RequestCard
-                  key={request.id}
-                  request={request}
-                  onApprove={(r, f, altId) => handleDecision(r, "APPROVED", f, altId)}
-                  onRevision={(r, f, altId, prohibitedWindow) =>
-                    handleDecision(r, "REVISION_REQUIRED", f, altId, prohibitedWindow)
-                  }
-                  onDecline={(r, f) => handleDecision(r, "REJECTED", f)}
-                />
-              ))}
-            </div>
-          )}
+            </header>
 
+            {error && <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>{error}</span></div>}
+
+            <section aria-labelledby="queue-heading">
+              <div className="mb-4 rounded-xl border border-[#d9e1e5] bg-white p-3 shadow-sm shadow-slate-900/[0.03] sm:flex sm:items-center sm:justify-between sm:gap-4">
+                <div className="mb-3 px-1 sm:mb-0">
+                  <h2 id="queue-heading" className="text-lg font-semibold text-[#172630]">Decision queue</h2>
+                  <p className="text-sm text-[#697780]">{visibleRequests.length} shown · sorted by priority</p>
+                </div>
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#f1f5f6] p-1 sm:flex" aria-label="Filter request queue">
+                  {FILTERS.map(({ value, label, icon: Icon }) => (
+                    <button key={value} type="button" onClick={() => setQueueFilter(value)} aria-pressed={queueFilter === value} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] ${queueFilter === value ? "bg-white text-[#203f53] shadow-sm" : "text-[#60717d] hover:bg-white/70"}`}>
+                      <Icon size={16} aria-hidden="true" /> {label}
+                      <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs ${queueFilter === value ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>{counts[value]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loading && requests.length === 0 ? (
+                <div role="status" aria-live="polite" className="space-y-3"><span className="sr-only">Loading possession requests</span>{[1, 2, 3].map((item) => <div key={item} className="h-48 animate-pulse rounded-xl border border-[#e0e5e7] bg-white" />)}</div>
+              ) : pendingRequests.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#cad5da] bg-white px-6 py-12 text-center"><span className="mx-auto grid size-12 place-items-center rounded-full bg-emerald-50 text-emerald-700"><FileCheck size={24} aria-hidden="true" /></span><h3 className="mt-4 text-lg font-semibold text-[#172630]">The decision queue is clear</h3><p className="mx-auto mt-1 max-w-md text-base leading-6 text-[#65747e]">All submitted requests have a decision. Released plans remain available with their evidence trail.</p></div>
+              ) : visibleRequests.length === 0 ? (
+                <div className="rounded-xl border border-[#d9e1e5] bg-white px-6 py-10 text-center"><h3 className="text-base font-semibold text-[#172630]">No requests match this filter</h3><button type="button" onClick={() => setQueueFilter("ALL")} className="mt-3 min-h-11 rounded-lg px-4 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75]">Show all requests</button></div>
+              ) : (
+                <div className="space-y-4">
+                  {visibleRequests.map((request) => <RequestCard key={request.id} request={request} onApprove={(item, feedback, alternativeId) => handleDecision(item, "APPROVED", feedback, alternativeId)} onRevision={(item, feedback, alternativeId, window) => handleDecision(item, "REVISION_REQUIRED", feedback, alternativeId, window)} onDecline={(item, feedback) => handleDecision(item, "REJECTED", feedback)} />)}
+                </div>
+              )}
+            </section>
+          </div>
         </main>
       </div>
     </div>

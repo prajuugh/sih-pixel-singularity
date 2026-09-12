@@ -2,6 +2,7 @@
 const { fallbackStore } = require("../config/database");
 const { callPythonAgentService } = require("./agent.service");
 const { persistLocalStore } = require("./local-store.service");
+const { recordAgentRun } = require("./agent-run.service");
 
 async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
   const planId = `PLAN-${horizon}-${Date.now().toString().slice(-6)}`;
@@ -41,6 +42,7 @@ async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
 
   const generatedBlocks = [];
   const generatedAlternatives = [];
+  const warnings = [];
 
   for (const req of pendingRequests) {
     const agentResponse = await callPythonAgentService("/agent/plan", {
@@ -51,6 +53,20 @@ async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
       startTime: req.preferred_start_time,
       endTime: req.preferred_end_time,
     });
+    recordAgentRun(agentResponse, req.request_id);
+
+    if (
+      agentResponse?.schemaVersion === "2.0" &&
+      agentResponse?.verification?.passed !== true
+    ) {
+      warnings.push({
+        requestId: req.request_id,
+        code: "PLAN_NOT_VERIFIED",
+        message: "No block was generated because hard-constraint verification did not pass.",
+        runId: agentResponse.runId,
+      });
+      continue;
+    }
 
     const blockId = fallbackStore.blocks.length + 1;
     const block = {
@@ -97,6 +113,7 @@ async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
     plan: newPlan,
     blocks: generatedBlocks,
     alternatives: generatedAlternatives,
+    warnings,
   };
 }
 

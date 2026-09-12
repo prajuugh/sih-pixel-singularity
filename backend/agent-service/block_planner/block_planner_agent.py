@@ -8,6 +8,8 @@ Responsibilities:
 - Alternative Evaluation (RESCHEDULE, DELAY, REROUTE, DIRECT CLEARANCE)
 - Ranking & Explainability
 """
+from datetime import date as date_type, timedelta
+
 
 def time_to_minutes(time_str: str) -> int:
     if not time_str:
@@ -17,11 +19,20 @@ def time_to_minutes(time_str: str) -> int:
 
 def minutes_to_time(total_min: int) -> str:
     norm = ((total_min % 1440) + 1440) % 1440
-    h = String = str(norm // 60).zfill(2)
+    h = str(norm // 60).zfill(2)
     m = str(norm % 60).zfill(2)
     return f"{h}:{m}"
 
+
+def date_with_offset(value: str, day_offset: int = 0) -> str:
+    try:
+        return (date_type.fromisoformat(value) + timedelta(days=day_offset)).isoformat()
+    except (TypeError, ValueError):
+        return value
+
 class BlockPlannerAgent:
+    VERSION = "block-planner@2.1.0"
+
     def __init__(self):
         # Initial expert-defined MCDA weights (PRD Section 33)
         self.weights = {
@@ -66,49 +77,52 @@ class BlockPlannerAgent:
             }
         }
 
-    def generate_plan(self, maintenance_info: dict, traffic_info: dict, date: str, prohibited_start: str = None, prohibited_end: str = None) -> dict:
+    def generate_plan(
+        self,
+        maintenance_info: dict,
+        traffic_info: dict,
+        date: str,
+        prohibited_start: str = None,
+        prohibited_end: str = None,
+        feasible_windows: list = None,
+    ) -> dict:
         priority_res = self.calculate_priority_score(maintenance_info, traffic_info)
         p_score = priority_res["priorityScore"]
         has_conflict = traffic_info.get("hasConflict", False)
         conflicts = traffic_info.get("conflicts", [])
         track_id = maintenance_info.get("trackId", "KA-T-000342")
         duration = maintenance_info.get("durationMinutes", 90)
+        reroute = traffic_info.get("reroute") if traffic_info.get("rerouteFeasible") else None
 
         alternatives = []
 
         # If Officer designated a Prohibited Window (block CANNOT be planned in this window)
         if prohibited_start and prohibited_end:
-            p_start_min = time_to_minutes(prohibited_start)
-            p_end_min = time_to_minutes(prohibited_end)
-            if p_end_min <= p_start_min:
-                p_end_min += 1440
+            feasible_windows = feasible_windows or []
+            if not feasible_windows:
+                return {
+                    "priorityScore": p_score,
+                    "breakdown": priority_res["breakdown"],
+                    "conflict": True,
+                    "conflictingTrains": traffic_info.get("conflicts", []),
+                    "recommendedBlock": None,
+                    "alternatives": [],
+                    "explanation": "No conflict-free block window was found within the 24-hour search horizon.",
+                    "prohibitedWindow": {"startTime": prohibited_start, "endTime": prohibited_end},
+                }
 
-            # Candidate 1: Immediately after prohibited end + 15 min buffer
-            cand1_start_min = p_end_min + 15
-            cand1_end_min = cand1_start_min + duration
-
-            rev_start = minutes_to_time(cand1_start_min)
-            rev_end = minutes_to_time(cand1_end_min)
-
-            # Candidate 2: Night jumbo block (02:30 - 04:00)
-            cand2_start_min = time_to_minutes("02:30")
-            cand2_end_min = cand2_start_min + duration
-            alt2_start = minutes_to_time(cand2_start_min)
-            alt2_end = minutes_to_time(cand2_end_min)
-
-            # Candidate 3: Off-peak day window (11:30 - 13:00)
-            cand3_start_min = time_to_minutes("11:30")
-            cand3_end_min = cand3_start_min + duration
-            alt3_start = minutes_to_time(cand3_start_min)
-            alt3_end = minutes_to_time(cand3_end_min)
+            primary = feasible_windows[0]
+            rev_start = primary["startTime"]
+            rev_end = primary["endTime"]
 
             rec_window = {
-                "date": date,
+                "date": date_with_offset(date, primary.get("dayOffset", 0)),
                 "startTime": rev_start,
                 "endTime": rev_end,
                 "trackId": track_id,
                 "priorityScore": min(p_score + 5, 100),
                 "isRevised": True,
+                "dayOffset": primary.get("dayOffset", 0),
                 "prohibitedWindow": {
                     "startTime": prohibited_start,
                     "endTime": prohibited_end,
@@ -127,12 +141,23 @@ class BlockPlannerAgent:
                 "rank": 1,
             })
 
-            # If any conflicting trains were present during the revised window, REROUTE/DELAY would apply.
-            # Since the window has zero clashes, no reroute or delay alternatives are required.
+            for rank, candidate in enumerate(feasible_windows[1:3], start=2):
+                alternatives.append({
+                    "id": rank,
+                    "type": "RESCHEDULE",
+                    "description": f"Verified clear window {candidate['startTime']}-{candidate['endTime']} (candidate {rank}).",
+                    "feasible": True,
+                    "trainImpact": "No timetable overlap detected",
+                    "delayMinutes": 0,
+                    "operationalCost": float((rank - 1) * 150),
+                    "priorityScore": max(p_score + 6 - rank, 40),
+                    "rank": rank,
+                    "dayOffset": candidate.get("dayOffset", 0),
+                })
 
             explanation = (
                 f"Block Plan Revised by Traffic Officer: Corridor possession strictly prohibited during {prohibited_start}-{prohibited_end}. "
-                f"AI Multi-Agent engine revised the entire block plan to {rev_start}-{rev_end} ({duration} mins) with zero train delays."
+                f"The traffic agent verified the revised {rev_start}-{rev_end} window ({duration} minutes) against the current timetable snapshot."
             )
 
             return {
@@ -153,13 +178,19 @@ class BlockPlannerAgent:
             }
 
         if has_conflict:
-            # Determine latest departure of conflicting trains to compute optimal reschedule window
-            latest_dep = max(time_to_minutes(c.get("departure", "20:30")) for c in conflicts)
-            new_start_min = latest_dep + 10
-            new_end_min = new_start_min + duration
-
-            resched_start = minutes_to_time(new_start_min)
-            resched_end = minutes_to_time(new_end_min)
+            selected_day_offset = 0
+            if feasible_windows:
+                selected_window = feasible_windows[0]
+                resched_start = selected_window["startTime"]
+                resched_end = selected_window["endTime"]
+                selected_day_offset = selected_window.get("dayOffset", 0)
+            else:
+                # This legacy fallback will be vetoed if a later movement also occupies it.
+                latest_dep = max(time_to_minutes(c.get("departure", "20:30")) for c in conflicts)
+                new_start_min = latest_dep + 10
+                new_end_min = new_start_min + duration
+                resched_start = minutes_to_time(new_start_min)
+                resched_end = minutes_to_time(new_end_min)
 
             conflict_names = ", ".join([f"{c.get('trainName', 'Train')} ({c.get('trainNo')})" for c in conflicts])
 
@@ -193,28 +224,41 @@ class BlockPlannerAgent:
                 "rank": 2,
             })
 
-            # 3. Alternative 3: REROUTE
-            alternatives.append({
-                "id": 3,
-                "type": "REROUTE",
-                "description": f"Reroute non-stop freight traffic via chord junction line (+14 km detour).",
-                "feasible": True,
-                "trainImpact": "Detour +14 km (+20 min transit time)",
-                "delayMinutes": 20,
-                "operationalCost": 950.00,
-                "priorityScore": max(p_score - 14, 25),
-                "rank": 3,
-            })
+            # 3. REROUTE is offered only when the traffic agent found a
+            # connected path made from available railway GeoJSON edges.
+            if reroute:
+                extra_km = reroute["extraDistanceKm"]
+                delay_minutes = max(5, round(extra_km / 45 * 60))
+                alternatives.append({
+                    "id": 3,
+                    "type": "REROUTE",
+                    "description": f"Reroute via {len(reroute['trackIds'])} available railway track segment(s).",
+                    "feasible": True,
+                    "trainImpact": f"Detour +{extra_km} km (+{delay_minutes} min estimated transit time)",
+                    "delayMinutes": delay_minutes,
+                    "operationalCost": round(300 + extra_km * 45, 2),
+                    "priorityScore": max(p_score - 14, 25),
+                    "rank": 3,
+                    "routeGeometry": reroute,
+                    "routeTrackIds": reroute["trackIds"],
+                })
 
-            rec_window = {"date": date, "startTime": resched_start, "endTime": resched_end, "trackId": track_id, "priorityScore": p_score}
+            rec_window = {
+                "date": date_with_offset(date, selected_day_offset),
+                "startTime": resched_start,
+                "endTime": resched_end,
+                "trackId": track_id,
+                "priorityScore": p_score,
+                "dayOffset": selected_day_offset,
+            }
             explanation = (
                 f"MCDA Priority Score: {p_score}/100. Conflict detected with {conflict_names}. "
                 f"Recommended shift to {resched_start}-{resched_end} avoids train deceleration and guarantees safety buffer."
             )
         else:
-            # NO CONFLICT DETECTED FOR THIS TRACK / TIMETABLE
-            req_start = maintenance_info.get("startTime", "19:00")
-            req_end = maintenance_info.get("endTime", "20:30")
+            # NO CONFLICT DETECTED FOR THIS TRACK!
+            req_start = maintenance_info.get("requestedStartTime") or maintenance_info.get("startTime", "19:00")
+            req_end = maintenance_info.get("requestedEndTime") or maintenance_info.get("endTime", "20:30")
             rec_window = {"date": date, "startTime": req_start, "endTime": req_end, "trackId": track_id, "priorityScore": p_score}
 
             # If there are NO trains scheduled/clashing, no REROUTE or DELAY options are needed
@@ -229,7 +273,6 @@ class BlockPlannerAgent:
                 "priorityScore": min(p_score + 10, 100),
                 "rank": 1,
             })
-
             explanation = (
                 f"MCDA Priority Score: {p_score}/100. Clear corridor window on {track_id}. "
                 f"Direct maintenance clearance sanctioned with zero train conflicts or clashing timetables."

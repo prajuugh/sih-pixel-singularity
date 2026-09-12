@@ -73,6 +73,9 @@ const fallbackStore = {
   planning_alternatives: [],
   request_reviews: [],
   audit_logs: [],
+  agent_runs: [],
+  agent_steps: [],
+  constraint_results: [],
 };
 
 function getPool() {
