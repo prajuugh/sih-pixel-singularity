@@ -13,6 +13,9 @@ const persistedKeys = [
   "block_plans",
   "blocks",
   "block_tasks",
+  "agent_runs",
+  "agent_steps",
+  "constraint_results",
 ];
 
 function snapshotStore(store) {

@@ -1,21 +1,26 @@
 // frontend/src/pages/officer/LiveMap.jsx
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   MapContainer,
   TileLayer,
   GeoJSON,
+  Polyline,
+  CircleMarker,
+  Tooltip,
   useMap,
 } from "react-leaflet";
 import {
   MapPin, Train, AlertTriangle, Shield, CheckCircle2,
   Clock, Route, RefreshCw, X, Search, Calendar,
-  Wrench, Users, Check, AlertCircle, Sparkles, CheckCheck
+  Wrench, Users, AlertCircle, CheckCheck
 } from "lucide-react";
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import Button from "../../components/common/Button";
 import AgentDecisionTrace from "../../components/common/AgentDecisionTrace";
+import PlanExplanation from "../../components/officer/PlanExplanation";
 import { checkConflict, fetchAgentPlan, fetchRequests, fetchTracks, updateRequestStatus } from "../../utils/api";
 
 
@@ -27,7 +32,26 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api
 // ============================================================
 // MAP CONTROLLER — auto-zoom to selected track
 // ============================================================
-function MapController({ selectedTrack }) {
+function detourDistanceKm(alternative) {
+  if (alternative?.routeGeometry?.extraDistanceKm != null) {
+    return Number(alternative.routeGeometry.extraDistanceKm);
+  }
+  const text = `${alternative?.trainImpact || ""} ${alternative?.description || ""}`;
+  return Number(text.match(/\+?(\d+(?:\.\d+)?)\s*km/i)?.[1] || 0);
+}
+
+function buildDetourRoute(track, alternative) {
+  const supplied = alternative?.routeGeometry?.coordinates || alternative?.geometry?.coordinates;
+  if (!track || !Array.isArray(supplied) || supplied.length < 2) return null;
+  return {
+    coordinates: supplied,
+    extraKm: detourDistanceKm(alternative),
+    source: alternative.routeGeometry?.source || "PLANNER_NETWORK",
+    trackIds: alternative.routeGeometry?.trackIds || alternative.routeTrackIds || [],
+  };
+}
+
+function MapController({ selectedTrack, detourRoute }) {
   const map = useMap();
 
   useEffect(() => {
@@ -35,9 +59,10 @@ function MapController({ selectedTrack }) {
     const coords = selectedTrack.geometry?.coordinates;
     if (!coords || coords.length === 0) return;
 
-    const latLngs = coords.map((c) => [c[1], c[0]]);
+    const allCoordinates = detourRoute?.coordinates?.length ? [...coords, ...detourRoute.coordinates] : coords;
+    const latLngs = allCoordinates.map((c) => [c[1], c[0]]);
     map.fitBounds(latLngs, { padding: [60, 60], maxZoom: 14 });
-  }, [selectedTrack, map]);
+  }, [selectedTrack, detourRoute, map]);
 
   return null;
 }
@@ -46,6 +71,21 @@ function MapController({ selectedTrack }) {
 // MAIN COMPONENT
 // ============================================================
 export default function LiveMap() {
+  const location = useLocation();
+  const initialRouteIntent = useMemo(() => {
+    if (location.state?.trackId) return location.state;
+    const params = new URLSearchParams(location.search);
+    if (params.get("preview") !== "reroute" || !params.get("track")) return null;
+    return {
+      trackId: params.get("track"),
+      requestId: params.get("request"),
+      detourAlternative: {
+        type: "REROUTE",
+        trainImpact: `Detour +${params.get("extraKm") || 14} km`,
+        delayMinutes: Number(params.get("delay") || 20),
+      },
+    };
+  }, [location.search, location.state]);
   const [tracks, setTracks] = useState(null);           // GeoJSON FeatureCollection
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [schedules, setSchedules] = useState([]);
@@ -57,13 +97,19 @@ export default function LiveMap() {
   const [activeTab, setActiveTab] = useState("trains");
   const [searchId, setSearchId] = useState("");
   const [searchError, setSearchError] = useState("");
+  const [activeDetour, setActiveDetour] = useState(initialRouteIntent?.detourAlternative || null);
+  const [detourHidden, setDetourHidden] = useState(false);
 
   // Live maintenance requests and completion override state
   const [requests, setRequests] = useState([]);
   const [completedMap, setCompletedMap] = useState({});
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [detourCaseId] = useState(initialRouteIntent?.requestId || null);
+  const [detourRequested] = useState(Boolean(initialRouteIntent?.detourAlternative));
 
   const geoJsonRef = useRef(null);
+  const routeIntentRef = useRef(initialRouteIntent);
+  const routeIntentHandledRef = useRef(false);
 
   // ----------------------------------------------------------
   // HELPER: DETECT TRACK MAINTENANCE STATE (RED vs BLUE vs NORMAL)
@@ -115,7 +161,9 @@ export default function LiveMap() {
           isTimeFinished = true;
         }
       }
-    } catch (e) {}
+    } catch {
+      isTimeFinished = false;
+    }
 
     const isFinished = isExplicitCompleted || isManuallyFinished || isTimeFinished;
 
@@ -225,14 +273,18 @@ export default function LiveMap() {
         }
       });
     }
+    // The style helper is intentionally re-created from exactly these live inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requests, completedMap, selectedTrack, currentTime]);
 
   // ----------------------------------------------------------
   // LOAD SCHEDULE + CONFLICT + AI for a selected track
   // ----------------------------------------------------------
-  const loadTrackDetails = async (feature, day = selectedDay) => {
+  const loadTrackDetails = async (feature, day = selectedDay, options = {}) => {
     const trackId = feature.properties.track_id;
     setSelectedTrack(feature);
+    setActiveDetour(options.detour || null);
+    setDetourHidden(false);
     setLoadingDetails(true);
     setSchedules([]);
     setConflictData(null);
@@ -240,7 +292,7 @@ export default function LiveMap() {
 
     // If this track is under maintenance, default to "maintenance" tab
     const maint = getTrackState(trackId, requests, completedMap);
-    setActiveTab(maint ? "maintenance" : "trains");
+    setActiveTab(options.detour ? "ai" : (maint ? "maintenance" : "trains"));
 
     try {
       // 1. Corridor-Aware Real schedule
@@ -278,6 +330,20 @@ export default function LiveMap() {
       setLoadingDetails(false);
     }
   };
+
+  useEffect(() => {
+    const intent = routeIntentRef.current;
+    if (!tracks || !intent?.trackId || routeIntentHandledRef.current) return;
+    const requestedFeature = tracks.features?.find(
+      (feature) => feature.properties?.track_id?.toUpperCase() === intent.trackId.toUpperCase()
+    );
+    if (!requestedFeature) return;
+    routeIntentHandledRef.current = true;
+    setSearchId(intent.trackId);
+    loadTrackDetails(requestedFeature, selectedDay, { detour: intent.detourAlternative });
+    // Route intent is consumed once after the GeoJSON network loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks]);
 
   const handleDayChange = async (day) => {
     setSelectedDay(day);
@@ -380,6 +446,22 @@ export default function LiveMap() {
     loadTrackDetails(feature);
   };
 
+  const validAgentAlternatives = useMemo(
+    () => (agentPlan?.alternatives || []).filter(
+      (alternative) => alternative.type !== "REROUTE" || alternative.routeGeometry?.coordinates?.length > 1
+    ),
+    [agentPlan]
+  );
+  const agentReroute = validAgentAlternatives.find((alternative) => alternative.type === "REROUTE") || null;
+  const displayedDetour = detourHidden ? null : (
+    activeDetour?.routeGeometry?.coordinates?.length > 1
+      ? activeDetour
+      : (detourRequested ? agentReroute : activeDetour)
+  );
+  const detourRoute = useMemo(
+    () => displayedDetour?.type === "REROUTE" ? buildDetourRoute(selectedTrack, displayedDetour) : null,
+    [selectedTrack, displayedDetour]
+  );
 
   const selectedMaint = selectedTrack
     ? getTrackState(selectedTrack.properties?.track_id, requests, completedMap)
@@ -493,6 +575,12 @@ export default function LiveMap() {
               <span className="w-4 h-1 rounded bg-amber-500 inline-block" />
               Selected Track
             </span>
+            {detourRoute && (
+              <span className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 shadow-sm">
+                <span className="inline-block w-4 border-t-2 border-dashed border-violet-600" />
+                Suggested detour (+{detourRoute.extraKm} km)
+              </span>
+            )}
             {!tracks && (
               <span className="flex items-center gap-1.5 text-xs text-gray-500 animate-pulse">
                 <RefreshCw size={12} className="animate-spin" />
@@ -565,7 +653,22 @@ export default function LiveMap() {
                   />
                 )}
 
-                <MapController selectedTrack={selectedTrack} />
+                {detourRoute && (
+                  <>
+                    <Polyline
+                      positions={detourRoute.coordinates.map((coordinate) => [coordinate[1], coordinate[0]])}
+                      pathOptions={{ color: "#7c3aed", weight: 7, opacity: 0.9, dashArray: "12 9", lineCap: "round" }}
+                    >
+                      <Tooltip sticky>
+                        Suggested reroute · +{detourRoute.extraKm} km · {displayedDetour?.delayMinutes || 20} min
+                      </Tooltip>
+                    </Polyline>
+                    <CircleMarker center={[detourRoute.coordinates[0][1], detourRoute.coordinates[0][0]]} radius={6} pathOptions={{ color: "#5b21b6", fillColor: "#ffffff", fillOpacity: 1, weight: 3 }}><Tooltip>Detour entry</Tooltip></CircleMarker>
+                    <CircleMarker center={[detourRoute.coordinates.at(-1)[1], detourRoute.coordinates.at(-1)[0]]} radius={6} pathOptions={{ color: "#5b21b6", fillColor: "#ffffff", fillOpacity: 1, weight: 3 }}><Tooltip>Detour exit</Tooltip></CircleMarker>
+                  </>
+                )}
+
+                <MapController selectedTrack={selectedTrack} detourRoute={detourRoute} />
               </MapContainer>
             </div>
 
@@ -600,6 +703,39 @@ export default function LiveMap() {
                     <X size={18} />
                   </button>
                 </div>
+
+                {detourRoute && (
+                  <div className="border-b border-violet-200 bg-violet-50 p-3 text-violet-950">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2">
+                        <Route size={18} className="mt-0.5 shrink-0 text-violet-700" />
+                        <div>
+                          <p className="text-sm font-bold">Suggested reroute visible on map</p>
+                          <p className="mt-0.5 text-xs leading-5 text-violet-800">
+                            +{detourRoute.extraKm} km · about {displayedDetour?.delayMinutes || 20} min
+                            {detourCaseId ? ` · Case ${detourCaseId}` : ""}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-violet-700">
+                            Follows connected railway edges in the loaded OSM network snapshot. Confirm signalling and current route availability before approval.
+                          </p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => { setActiveDetour(null); setDetourHidden(true); }} className="min-h-11 shrink-0 rounded-lg px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600">Hide</button>
+                    </div>
+                  </div>
+                )}
+
+                {detourRequested && agentPlan && !detourRoute && (
+                  <div className="border-b border-amber-200 bg-amber-50 p-3 text-amber-950">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-700" />
+                      <div>
+                        <p className="text-sm font-bold">No rail reroute available</p>
+                        <p className="mt-0.5 text-xs leading-5 text-amber-800">The network search found no connected alternate track around {selectedTrack.properties.track_id}. No detour is drawn.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Maintenance Quick Banner if Track is Allocated */}
                 {selectedMaint && (
@@ -976,8 +1112,14 @@ export default function LiveMap() {
                             requestId={agentPlan.requestId || selectedTrack.properties.track_id}
                             trackIds={[selectedTrack.properties.track_id]}
                             requestedWindow={{ startTime: "19:00", endTime: "20:30" }}
-                            agentPlan={agentPlan}
+                            agentPlan={{ ...agentPlan, alternatives: validAgentAlternatives }}
                             conflictData={conflictData}
+                          />
+                          <PlanExplanation
+                            details={agentPlan.explanationDetails}
+                            requestedWindow={{ startTime: "19:00", endTime: "20:30" }}
+                            recommendedBlock={agentPlan.recommendedBlock}
+                            conflicts={agentPlan.conflictingTrains || conflictData?.conflicts || []}
                           />
                           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                             <div className="flex items-center justify-between">
@@ -994,7 +1136,7 @@ export default function LiveMap() {
                             AI Ranked Alternatives
                           </h4>
 
-                          {agentPlan.alternatives?.map((alt) => (
+                          {validAgentAlternatives.map((alt) => (
                             <div
                               key={alt.id}
                               className={`border rounded-xl p-3.5 text-xs space-y-1 ${
@@ -1015,6 +1157,25 @@ export default function LiveMap() {
                               </div>
                               <p className="text-gray-700">{alt.description}</p>
                               <p className="text-gray-500">Impact: {alt.trainImpact || "Zero delay"}</p>
+                              {alt.type === "REROUTE" && alt.routeGeometry?.coordinates?.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (detourRoute) {
+                                      setActiveDetour(null);
+                                      setDetourHidden(true);
+                                    } else {
+                                      setActiveDetour(alt);
+                                      setDetourHidden(false);
+                                    }
+                                  }}
+                                  aria-pressed={Boolean(detourRoute)}
+                                  className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3 text-sm font-semibold text-violet-900 hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
+                                >
+                                  <MapPin size={16} />
+                                  {detourRoute ? "Hide detour on map" : "Show detour on map"}
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>

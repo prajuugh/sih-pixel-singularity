@@ -11,7 +11,6 @@ import {
 } from "./constants";
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-export const AGENT_URL = import.meta.env.VITE_AGENT_BASE_URL || "http://localhost:5001";
 
 function delay(data, ms = 200) {
   return new Promise((resolve) => setTimeout(() => resolve(data), ms));
@@ -117,7 +116,7 @@ export async function fetchRequests() {
             updated: r.updated_at ? new Date(r.updated_at).toLocaleString() : r.requested_date,
             // Multi-Agent Block Plan fields
             agentPlan: r.agent_plan,
-            priorityScore: r.priority_score ?? r.agent_plan?.priorityScore ?? 75,
+            priorityScore: r.priority_score ?? r.agent_plan?.priorityScore ?? (r.agent_plan?.schemaVersion === "2.0" ? null : 75),
             conflict: r.conflict !== undefined ? r.conflict : Boolean(r.agent_plan?.conflict),
             conflictingTrains: r.conflicting_trains || r.agent_plan?.conflictingTrains || [],
             recommendedBlock: r.recommended_block || r.agent_plan?.recommendedBlock || null,
@@ -278,45 +277,54 @@ export async function checkConflict(payload) {
 }
 
 export async function fetchAgentPlan(payload) {
-  // 1. First try through Node backend proxy (port 5000)
+  // Planning always passes through the authenticated API boundary. The browser
+  // never calls the Python service or fabricates an operational recommendation.
   try {
     const res = await fetch(`${BASE_URL}/planning/agent-plan`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders("OFFICER"),
       body: JSON.stringify(payload),
     });
     if (res.ok) {
       return await res.json();
     }
   } catch (err) {
-    // try direct
+    console.warn("Planning API unavailable:", err.message);
   }
 
-  // 2. Try direct Python agent service (port 5001)
-  try {
-    const res = await fetch(`${AGENT_URL}/agent/plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn("Python agent offline:", err.message);
-  }
-
+  const now = new Date().toISOString();
   return {
-    priorityScore: 78,
-    breakdown: { safety: 85, criticality: 80, urgency: 75, overdue: 60, failureProbability: 65 },
-    conflict: false,
+    schemaVersion: "2.0",
+    runId: `frontend_degraded_${Date.now()}`,
+    requestId: payload.requestId || null,
+    status: "DEGRADED",
+    priorityScore: null,
+    breakdown: {},
+    conflict: null,
     conflictingTrains: [],
-    recommendedBlock: { date: payload.planningDate || "2026-09-15", startTime: "19:00", endTime: "20:30", trackId: payload.trackId || "KA-T-000342" },
-    alternatives: [
-      { id: 1, type: "DIRECT CLEARANCE", description: `Sanction window directly on ${payload.trackId}. No passenger conflict.`, delayMinutes: 0, rank: 1 },
-      { id: 2, type: "SHADOW CLUSTERING", description: "Cluster multi-department S&T + Electrical maintenance during window.", delayMinutes: 0, rank: 2 },
-    ],
-    explanation: `MCDA Priority Score: 78/100 for ${payload.trackId}. Direct maintenance clearance recommended.`,
+    recommendedBlock: null,
+    alternatives: [],
+    explanation: "The planning API is unavailable. No operational recommendation was generated.",
+    verification: {
+      passed: false,
+      checkedRules: ["PLANNING_API_AVAILABLE"],
+      failedRules: [{ ruleId: "PLANNING_API_AVAILABLE", severity: "HARD", message: "The authenticated planning API is unavailable." }],
+    },
+    trace: [{
+      stepId: "planning-api-1",
+      agent: "agent-service",
+      status: "FAILED",
+      startedAt: now,
+      finishedAt: now,
+      durationMs: 0,
+      inputArtifactIds: ["planning-request:v1"],
+      outputArtifactIds: [],
+      evidence: [],
+      summary: "Planning API unavailable; execution stopped safely.",
+      implementationVersion: "frontend-api@2.0.0",
+    }],
+    warnings: ["Retry when the backend planning API is healthy."],
+    requiresHumanApproval: true,
   };
 }
 

@@ -2,14 +2,19 @@ services:
   # 1. Python 4-Agent Optimization Microservice
   agent-service:
     build:
-      context: ./backend/agent-service
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: agent-service/Dockerfile
     container_name: rbps-agent-service
     restart: unless-stopped
     ports:
       - "5001:5001"
     environment:
       - PORT=5001
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_EXPLANATION_MODEL=${OPENROUTER_EXPLANATION_MODEL:-deepseek/deepseek-chat}
+      - OPENROUTER_EXPLANATION_TIMEOUT_SECONDS=${OPENROUTER_EXPLANATION_TIMEOUT_SECONDS:-8}
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-http://localhost}
+      - OPENROUTER_APP_NAME=${OPENROUTER_APP_NAME:-Railway Block Planning System}
     networks:
       - rbps-network
     healthcheck:

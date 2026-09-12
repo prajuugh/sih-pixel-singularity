@@ -1,6 +1,8 @@
 // backend/src/controllers/planning.controller.js
 const { fallbackStore } = require("../config/database");
 const { generatePlan } = require("../services/planning.service");
+const { recordAgentRun } = require("../services/agent-run.service");
+const { persistLocalStore } = require("../services/local-store.service");
 
 async function postWeeklyPlan(req, res, next) {
   try {
@@ -98,7 +100,27 @@ async function postAgentPlan(req, res, next) {
   try {
     const { callPythonAgentService } = require("../services/agent.service");
     const plan = await callPythonAgentService("/agent/plan", req.body);
+    recordAgentRun(plan, req.body.requestId || req.body.taskId);
+    persistLocalStore(fallbackStore);
     res.json(plan);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getAgentRun(req, res, next) {
+  try {
+    const run = fallbackStore.agent_runs.find((item) => item.run_id === req.params.runId);
+    if (!run) {
+      return res.status(404).json({
+        success: false,
+        error: { code: "AGENT_RUN_NOT_FOUND", message: `Agent run ${req.params.runId} not found` },
+      });
+    }
+
+    const steps = fallbackStore.agent_steps.filter((step) => step.run_id === run.run_id);
+    const constraints = fallbackStore.constraint_results.filter((result) => result.run_id === run.run_id);
+    return res.json({ success: true, data: { run, steps, constraints } });
   } catch (err) {
     next(err);
   }
@@ -111,4 +133,5 @@ module.exports = {
   getPlanBlocks,
   getPlanAlternatives,
   postAgentPlan,
+  getAgentRun,
 };
