@@ -10,8 +10,24 @@ import {
   mockActivity,
 } from "./constants";
 
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-export const AGENT_URL = import.meta.env.VITE_AGENT_BASE_URL || "http://localhost:5001";
+function resolveApiBaseUrl() {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl !== "http://localhost:5000/api") {
+    return envUrl;
+  }
+  if (typeof window !== "undefined" && window.location) {
+    // Only connect directly to localhost:5000 if developing locally on Vite port 5173
+    if (window.location.hostname === "localhost" && window.location.port === "5173") {
+      return "http://localhost:5000/api";
+    }
+    // In Docker Nginx, Cloudflare tunnel, and production, use relative /api
+    return "/api";
+  }
+  return "/api";
+}
+
+export const BASE_URL = resolveApiBaseUrl();
+export const AGENT_URL = import.meta.env.VITE_AGENT_BASE_URL || "/api/planning/agent-plan";
 
 function delay(data, ms = 200) {
   return new Promise((resolve) => setTimeout(() => resolve(data), ms));
