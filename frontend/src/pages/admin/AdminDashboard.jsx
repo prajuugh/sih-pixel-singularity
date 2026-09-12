@@ -73,23 +73,23 @@ export default function AdminDashboard() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleRoleChange = (selectedRole) => {
-    setForm((prev) => ({
-      ...prev,
-      role: selectedRole,
-      department: selectedRole === "Officer" ? "Any Department" : "Engineering",
-    }));
-  };
-
   const handleAddUser = async (e) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.password) {
       setError("Name, email, and password are required.");
       return;
     }
+    if (form.role === "Teams" && !form.department) {
+      setError("Please select a department for the Teams role.");
+      return;
+    }
     setSaving(true);
     setError("");
-    const result = await createUser(form);
+    const submissionData = {
+      ...form,
+      department: form.role === "Teams" ? (form.department || "Engineering") : "—",
+    };
+    const result = await createUser(submissionData);
     setSaving(false);
     if (result.success && result.data) {
       setUsers((prev) => [
@@ -184,7 +184,6 @@ export default function AdminDashboard() {
                   <option>Signal & Telecom</option>
                   <option>Traction</option>
                   <option>Control</option>
-                  <option>Any Department</option>
                 </select>
                 <ChevronDown size={14} className="-ml-5 pointer-events-none" />
               </label>
@@ -285,32 +284,35 @@ export default function AdminDashboard() {
             <select
               id="new-user-role"
               value={form.role}
-              onChange={(e) => handleRoleChange(e.target.value)}
+              onChange={(e) => {
+                const nextRole = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  role: nextRole,
+                  department: nextRole === "Teams" ? (prev.department || "Engineering") : "",
+                }));
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             >
               <option value="Teams">Teams (Field/Maintenance Staff)</option>
               <option value="Officer">Officer (Approving Authority)</option>
             </select>
 
-            <label htmlFor="new-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-            <select
-              id="new-user-department"
-              value={form.department}
-              onChange={(e) => handleFormChange("department", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
-            >
-              {form.role === "Teams" ? (
-                <>
+            {form.role === "Teams" && (
+              <>
+                <label htmlFor="new-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <select
+                  id="new-user-department"
+                  value={form.department || "Engineering"}
+                  onChange={(e) => handleFormChange("department", e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
+                >
                   <option value="Engineering">Engineering</option>
                   <option value="Signal & Telecom">Signal & Telecom</option>
                   <option value="Traction">Traction</option>
-                </>
-              ) : (
-                <>
-                  <option value="Any Department">Any Department</option>
-                </>
-              )}
-            </select>
+                </select>
+              </>
+            )}
 
             {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 

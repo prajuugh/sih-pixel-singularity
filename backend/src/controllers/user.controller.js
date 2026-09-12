@@ -72,18 +72,22 @@ async function createUser(req, res, next) {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedRole = (role || "TEAMS").toUpperCase();
 
+    // Administrators cannot create another Admin account
     if (normalizedRole === "ADMIN") {
       return res.status(403).json({
         success: false,
-        error: { code: "FORBIDDEN", message: "Admins cannot create another admin account." },
+        error: { code: "FORBIDDEN", message: "Administrators cannot create another Admin account." },
       });
     }
 
     const validRoles = ["OFFICER", "TEAMS"];
     const finalRole = validRoles.includes(normalizedRole) ? normalizedRole : "TEAMS";
-    let finalDept = department && department.trim() ? department.trim() : "—";
-    if (finalRole === "OFFICER" && (!finalDept || finalDept === "—")) {
-      finalDept = "Any Department";
+
+    // For OFFICER, department is not applicable ("—"). For TEAMS, department must be Engineering, Signal & Telecom, or Traction.
+    let finalDept = "—";
+    if (finalRole === "TEAMS") {
+      const allowedDepts = ["Engineering", "Signal & Telecom", "Traction"];
+      finalDept = allowedDepts.includes(department) ? department : "Engineering";
     }
 
     // Check if user already exists in fallbackStore or DB
