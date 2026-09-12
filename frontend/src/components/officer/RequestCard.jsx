@@ -7,7 +7,6 @@ import {
   Clock,
   MapPin,
   Route,
-  Zap,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -51,7 +50,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
   const [selectedAltId, setSelectedAltId] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [showAgentTrace, setShowAgentTrace] = useState(false);
+  const [showAgentTrace, setShowAgentTrace] = useState(true);
 
   // Prohibited time window state (times on which block cannot be planned)
   const initialProhibited = request.raw?.prohibited_window || request.prohibitedWindow;
@@ -195,61 +194,49 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
   };
 
   // Score styling
-  const scoreColor =
-    priorityScore >= 80
-      ? "bg-purple-50 text-purple-800 border-purple-200"
-      : priorityScore >= 65
-      ? "bg-blue-50 text-blue-800 border-blue-200"
-      : "bg-emerald-50 text-emerald-800 border-emerald-200";
+  const scoreColor = priorityScore >= 80 ? "text-[#315b75]" : priorityScore >= 65 ? "text-amber-700" : "text-emerald-700";
 
   return (
-    <div className="relative flex flex-col justify-between gap-4 rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.06] transition-[box-shadow] duration-150 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_12px_28px_rgb(0_0_0/0.08)]">
+    <article className={`relative flex flex-col gap-4 overflow-hidden rounded-xl border bg-white p-5 transition-colors ${hasConflict ? "border-amber-300" : "border-[#dfe2df]"}`}>
       {/* Header with Department, Track, and Live Status */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-[#b83825] bg-green-100 px-2.5 py-0.5 rounded">
+            <span className="text-xs font-semibold text-[#315b75]">
               {request.department}
             </span>
-            <span className="text-xs font-semibold text-gray-500 flex items-center gap-1">
-              <MapPin size={12} className="text-green-700" /> {request.raw?.track_id || "KA-T-000342"}
-            </span>
-
-            {/* AI MCDA Priority Score Badge */}
-            <span
-              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border ${scoreColor}`}
-            >
-              <Zap size={11} className="text-amber-500" />
-              MCDA Score: {priorityScore}/100
+            <span className="text-xs text-gray-300">/</span>
+            <span className="flex items-center gap-1 text-xs font-semibold text-gray-500">
+              <MapPin size={11} /> {request.raw?.track_id || "KA-T-000342"}
             </span>
           </div>
 
-          <h4 className="font-bold text-gray-900 text-lg mt-1.5">{request.type}</h4>
-          <p className="text-xs font-mono text-gray-400">{request.id}</p>
+          <h4 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-[#171918]">{request.type}</h4>
+          <p className="mt-1 font-mono text-xs text-gray-400">Case {request.id}</p>
         </div>
 
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-            requestStatusStyles[request.status] || "bg-blue-100 text-blue-700"
-          }`}
-        >
-          {request.status}
-        </span>
+        <div className="shrink-0 border-l border-[#e4e7e4] pl-4 text-right">
+          <p className={`text-2xl font-semibold leading-none ${scoreColor}`}>{priorityScore}</p>
+          <p className="mt-1 text-[11px] font-semibold text-gray-400">priority / 100</p>
+          <span className={`mt-2 inline-flex whitespace-nowrap rounded px-2 py-1 text-xs font-semibold ${requestStatusStyles[request.status] || "bg-blue-100 text-blue-700"}`}>
+            {request.status}
+          </span>
+        </div>
       </div>
 
       {/* Possession Window Details */}
-      <div className="space-y-2.5 text-xs bg-gray-50 p-3.5 rounded-lg border border-gray-100">
+      <div className="space-y-3 border-y border-[#eceeec] bg-[#fafbfa] px-3.5 py-3 text-xs">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-gray-400 font-medium">Requested Window</p>
+            <p className="text-xs font-semibold text-gray-400">Requested window</p>
             <p className="text-gray-900 font-semibold flex items-center gap-1 mt-0.5">
-              <Clock size={13} className="text-green-700" />
+              <Clock size={13} className="text-[#315b75]" />
               {request.raw?.preferred_start_time || "19:00"} - {request.raw?.preferred_end_time || "21:00"}
               &nbsp;({request.date})
             </p>
           </div>
           <div>
-            <p className="text-gray-400 font-medium">Estimated Possession</p>
+            <p className="text-xs font-semibold text-gray-400">Work duration</p>
             <p className="text-gray-900 font-semibold mt-0.5">
               {request.raw?.estimated_duration_minutes || 120} mins (
               {(Number(request.raw?.estimated_duration_minutes || 120) / 60).toFixed(1)} hrs)
@@ -259,8 +246,8 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
         {/* Track possession zone */}
         <div>
-          <p className="text-gray-400 font-medium mb-1">
-            Track Possession Segments{" "}
+          <p className="mb-1 text-xs font-semibold text-gray-400">
+            Possession segments{" "}
             {(request.raw?.track_ids?.length || 1) > 1 && (
               <span className="text-green-700 font-bold">
                 ({request.raw.track_ids.length} segments)
@@ -276,7 +263,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                 key={tid}
                 className="inline-flex items-center gap-1 text-[11px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-800"
               >
-                <Route size={10} className="text-green-700" />
+                <Route size={10} className="text-[#315b75]" />
                 {tid}
               </span>
             ))}
@@ -286,7 +273,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
       {/* PROMINENT REVISED BLOCK PLAN DISPLAY (When request is revised / blackout enforced) */}
       {isRevised ? (
-        <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 border-2 border-emerald-400 rounded-xl p-4 shadow-xs space-y-3">
+        <div className="space-y-3 rounded-xl border border-emerald-300 bg-emerald-50/55 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="flex h-3 w-3 relative">
@@ -294,12 +281,12 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
               </span>
               <h5 className="font-extrabold text-emerald-950 text-sm tracking-wide uppercase flex items-center gap-1.5">
-                <Sparkles size={16} className="text-amber-500" />
-                Revised Block Plan
+                <Route size={16} />
+                Planner revision
               </h5>
             </div>
-            <span className="text-xs font-mono font-bold bg-emerald-800 text-white px-3 py-1 rounded-full shadow-2xs">
-              AI Optimized Slot
+            <span className="rounded border border-emerald-300 bg-white px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+              Feasible window
             </span>
           </div>
 
@@ -371,7 +358,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
             {recommendedBlock && (
               <p className="text-amber-900 font-medium pt-1 text-[11px] border-t border-amber-200/60">
-                💡 AI Recommended Window:{" "}
+                Planner recommendation:{" "}
                 <span className="font-bold underline">
                   {recommendedBlock.startTime} - {recommendedBlock.endTime}
                 </span>{" "}
@@ -408,7 +395,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
           className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-[#b83825] transition-colors cursor-pointer"
         >
           <TrendingUp size={12} />
-          <span>MCDA Priority Factor Breakdown</span>
+          <span>Inspect priority factors</span>
           {showBreakdown ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
 
@@ -450,8 +437,8 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
           aria-expanded={showAgentTrace}
         >
           <span>
-            <span className="block text-xs font-semibold text-[#171918]">Inspect agent decision trace</span>
-            <span className="mt-0.5 block text-[11px] text-gray-500">Inputs, evidence, scoring and human checkpoint</span>
+            <span className="block text-xs font-semibold text-[#171918]">Agent handoff record</span>
+            <span className="mt-0.5 block text-[11px] text-gray-500">Inputs → traffic check → safety score → ranked options → officer</span>
           </span>
           {showAgentTrace ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
@@ -477,8 +464,8 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-gray-600">
             <span className="flex items-center gap-1 font-bold text-gray-700">
-              <Sparkles size={12} className="text-amber-500" />
-              Operational Approval Options ({alternatives.length}):
+              <Route size={12} className="text-[#315b75]" />
+              Ranked operating strategies ({alternatives.length})
             </span>
             <span className="text-[10px] text-gray-400 font-medium">Select option to approve</span>
           </div>
@@ -819,6 +806,6 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
           </form>
         </Modal>
       )}
-    </div>
+    </article>
   );
 }
