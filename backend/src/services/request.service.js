@@ -9,10 +9,13 @@ async function enrichRequestWithAgentPlan(req) {
   const traceVersions = new Set((existingPlan?.trace || []).map((step) => step.implementationVersion));
   const hasNetworkAwarePlan = traceVersions.has("traffic-rules@2.1.0") && traceVersions.has("block-planner@2.1.0");
   const isAwaitingDecision = ["SUBMITTED", "UNDER_REVIEW"].includes(req.status);
+  const hadInfrastructureFailure = existingPlan?.verification?.failedRules?.some(
+    (r) => r.ruleId === "AUTHORITATIVE_TIMETABLE" || r.ruleId === "AGENT_SERVICE_AVAILABLE"
+  );
 
-  // Preserve completed decisions and current plans. Only pending legacy plans
-  // are refreshed so route geometry can be computed without rewriting history.
-  if (existingPlan && (!isAwaitingDecision || hasNetworkAwarePlan)) {
+  // Preserve valid completed decisions and current plans. If a stored plan failed due to
+  // an infrastructure/network glitch, refresh it with the verified agent service.
+  if (existingPlan && !hadInfrastructureFailure && (!isAwaitingDecision || hasNetworkAwarePlan)) {
     return req;
   }
 

@@ -54,7 +54,7 @@ function hydrateLocalStore(store) {
           }
           store.users = mergedUsers;
         }
-      } else if (Array.isArray(saved[key])) {
+      } else if (Array.isArray(saved[key]) && saved[key].length > 0) {
         store[key] = saved[key];
       }
     }
