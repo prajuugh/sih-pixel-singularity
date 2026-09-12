@@ -131,15 +131,40 @@ function queryFallback(text, params = []) {
 
   if (sql.includes("FROM USERS")) {
     let results = [...fallbackStore.users];
-    if (sql.includes("WHERE EMAIL =")) {
-      const email = params[0];
-      results = results.filter((u) => u.email === email);
-    }
-    if (sql.includes("WHERE ID =")) {
+    if (sql.includes("WHERE") && (sql.includes("EMAIL") || sql.includes("NAME"))) {
+      const matchVal = (params[0] || "").toLowerCase().trim();
+      results = results.filter(
+        (u) =>
+          (u.email && u.email.toLowerCase() === matchVal) ||
+          (u.name && u.name.toLowerCase() === matchVal) ||
+          (u.email && u.email.toLowerCase().split("@")[0] === matchVal)
+      );
+    } else if (sql.includes("WHERE") && sql.includes("ID")) {
       const id = parseInt(params[0]);
       results = results.filter((u) => u.id === id);
     }
+    if (sql.includes("LIMIT")) {
+      const limitMatch = text.match(/LIMIT\s+(\$?\d+|\d+)/i);
+      const limitVal = limitMatch
+        ? (limitMatch[1].startsWith("$") ? parseInt(params[parseInt(limitMatch[1].slice(1)) - 1]) : parseInt(limitMatch[1]))
+        : 100;
+      results = results.slice(0, limitVal);
+    }
     return { rows: results, rowCount: results.length };
+  }
+
+  if (sql.includes("INSERT INTO USERS")) {
+    const newUser = {
+      id: fallbackStore.users.length + 1,
+      name: params[0],
+      email: params[1],
+      password_hash: params[2],
+      role: params[3],
+      department: params[4],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    return { rows: [newUser], rowCount: 1 };
   }
 
   if (sql.includes("FROM ASSETS")) {

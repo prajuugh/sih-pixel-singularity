@@ -59,13 +59,13 @@ export default function LoginPage() {
             <p className="mt-2 text-sm text-gray-500">Use your authorized RBPS account.</p>
           </div>
 
-          <label htmlFor="username" className="mb-2 block text-sm font-medium text-gray-700">Username</label>
+          <label htmlFor="username" className="mb-2 block text-sm font-medium text-gray-700">Username or Email</label>
           <div className="mb-5 flex items-center rounded-lg border border-gray-300 px-3 py-3 transition-[border-color,box-shadow] duration-150 focus-within:border-[#cf432c] focus-within:ring-2 focus-within:ring-[#cf432c]/10">
             <User size={18} strokeWidth={1.5} className="mr-3 text-gray-400" />
             <input
               type="text"
               id="username"
-              placeholder="Enter your username"
+              placeholder="Enter your username or Gmail"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full outline-none text-gray-700"

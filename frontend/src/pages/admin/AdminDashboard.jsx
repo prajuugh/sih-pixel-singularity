@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar,
   Plus,
@@ -14,6 +14,7 @@ import {
 import Button from "../../components/common/Button";
 import Modal from "../../components/common/Modal";
 import Navbar from "../../components/common/Navbar";
+import { fetchUsers, createUser } from "../../utils/api";
 
 const initialUsers = [
   { id: 1, username: "admin", email: "admin@rbps.com", role: "Admin", department: "—" },
@@ -35,19 +36,34 @@ export default function AdminDashboard() {
   const [deptFilter, setDeptFilter] = useState("All Departments");
   const [users, setUsers] = useState(initialUsers);
   const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
-    department: "",
+    role: "Teams",
+    department: "Engineering",
   });
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    let active = true;
+    fetchUsers().then((res) => {
+      if (active && Array.isArray(res) && res.length > 0) {
+        setUsers(res);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.department.toLowerCase().includes(search.toLowerCase());
+      (u.email || "").toLowerCase().includes(search.toLowerCase()) ||
+      (u.username || "").toLowerCase().includes(search.toLowerCase()) ||
+      (u.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (u.department || "").toLowerCase().includes(search.toLowerCase());
     const matchesDept =
       deptFilter === "All Departments" || u.department === deptFilter;
     return matchesSearch && matchesDept;
@@ -57,23 +73,27 @@ export default function AdminDashboard() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password || !form.department) {
-      setError("All fields are required.");
+    if (!form.name || !form.email || !form.password) {
+      setError("Name, email, and password are required.");
       return;
     }
-    const newUser = {
-      id: users.length + 1,
-      username: form.email.split("@")[0],
-      email: form.email,
-      role: "Teams",
-      department: form.department,
-    };
-    setUsers((prev) => [...prev, newUser]);
-    setForm({ name: "", email: "", password: "", department: "" });
+    setSaving(true);
     setError("");
-    setShowModal(false);
+    const result = await createUser(form);
+    setSaving(false);
+    if (result.success && result.data) {
+      setUsers((prev) => [
+        result.data,
+        ...prev.filter((u) => (u.email || "").toLowerCase() !== (result.data.email || "").toLowerCase()),
+      ]);
+      setForm({ name: "", email: "", password: "", role: "Teams", department: "Engineering" });
+      setError("");
+      setShowModal(false);
+    } else {
+      setError(result.message || "Failed to add user.");
+    }
   };
 
   return (
@@ -252,6 +272,18 @@ export default function AdminDashboard() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             />
 
+            <label htmlFor="new-user-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <select
+              id="new-user-role"
+              value={form.role}
+              onChange={(e) => handleFormChange("role", e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
+            >
+              <option value="Teams">Teams (Field/Maintenance Staff)</option>
+              <option value="Officer">Officer (Approving Authority)</option>
+              <option value="Admin">Admin (System Administrator)</option>
+            </select>
+
             <label htmlFor="new-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
             <select
               id="new-user-department"
@@ -259,7 +291,6 @@ export default function AdminDashboard() {
               onChange={(e) => handleFormChange("department", e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             >
-              <option value="">Select department</option>
               <option value="Engineering">Engineering</option>
               <option value="Signal & Telecom">Signal & Telecom</option>
               <option value="Traction">Traction</option>
@@ -279,9 +310,10 @@ export default function AdminDashboard() {
               </Button>
               <Button
                 type="submit"
+                disabled={saving}
                 className="px-4 py-2 text-sm"
               >
-                Add User
+                {saving ? "Adding..." : "Add User"}
               </Button>
             </div>
           </form>

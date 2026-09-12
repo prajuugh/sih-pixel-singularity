@@ -435,7 +435,53 @@ export async function fetchTasksByDate() {
 
 export function fetchAdminStats() { return delay(mockAdminStats); }
 export function fetchDepartmentUsage() { return delay(mockDepartmentUsage); }
-export function fetchRecentActivity() { return delay(mockActivity); }
-export function fetchUsers() { return delay(mockUsers); }
-export function createUser(form) { return delay({ success: true }); }
+export async function fetchUsers() {
+  try {
+    const headers = getAuthHeaders("ADMIN");
+    const res = await fetch(`${BASE_URL}/users`, { headers });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data && Array.isArray(json.data.users)) {
+        return json.data.users;
+      }
+    }
+  } catch (err) {
+    console.warn("Backend fetchUsers unavailable, using mock:", err.message);
+  }
+  return delay(mockUsers);
+}
+
+export async function createUser(form) {
+  try {
+    const headers = getAuthHeaders("ADMIN");
+    const res = await fetch(`${BASE_URL}/users`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        role: form.role || "Teams",
+        department: form.department || "—",
+      }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return { success: true, data: json.data?.user };
+    }
+    const errBody = await res.json().catch(() => null);
+    return {
+      success: false,
+      message: errBody?.error?.message || `Failed to create user (${res.status})`,
+    };
+  } catch (err) {
+    console.warn("Backend createUser unavailable:", err.message);
+    return {
+      success: false,
+      message: "User service is unavailable. Keep this form open and try again.",
+    };
+  }
+}
+
 export function deleteUser(username) { return delay({ success: true }); }
+

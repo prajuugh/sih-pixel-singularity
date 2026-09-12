@@ -6,6 +6,7 @@ const storePath = process.env.LOCAL_STORE_PATH
   : path.join(__dirname, "../../data/runtime-store.json");
 
 const persistedKeys = [
+  "users",
   "maintenance_requests",
   "planning_alternatives",
   "request_reviews",
@@ -38,7 +39,21 @@ function hydrateLocalStore(store) {
   try {
     const saved = JSON.parse(fs.readFileSync(storePath, "utf8"));
     for (const key of persistedKeys) {
-      if (Array.isArray(saved[key])) store[key] = saved[key];
+      if (key === "users") {
+        if (Array.isArray(saved[key]) && saved[key].length > 0) {
+          const savedEmails = new Set(saved[key].map((u) => (u.email || "").toLowerCase()));
+          const mergedUsers = [...saved[key]];
+          for (const seedUser of (store.users || [])) {
+            if (seedUser.email && !savedEmails.has(seedUser.email.toLowerCase())) {
+              savedEmails.add(seedUser.email.toLowerCase());
+              mergedUsers.push(seedUser);
+            }
+          }
+          store.users = mergedUsers;
+        }
+      } else if (Array.isArray(saved[key])) {
+        store[key] = saved[key];
+      }
     }
     return { restored: true, requestCount: store.maintenance_requests.length };
   } catch (error) {
