@@ -168,7 +168,8 @@ class TrafficAgent:
         return route
 
     def fetch_track_schedules(self, track_id: str) -> list:
-        url = f"http://localhost:5000/api/tracks/{track_id}/schedule"
+        backend_url = os.getenv("BACKEND_URL", os.getenv("NODE_API_URL", "http://backend:5000")).rstrip("/")
+        url = f"{backend_url}/api/tracks/{track_id}/schedule"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "TrafficAgent/1.0"})
             with urllib.request.urlopen(req, timeout=3) as resp:
@@ -176,7 +177,18 @@ class TrafficAgent:
                 self.last_schedule_source = "NODE_TIMETABLE_API"
                 self.last_schedule_authoritative = True
                 return data.get("schedules", [])
-        except Exception as e:
+        except Exception:
+            if "localhost" not in backend_url:
+                try:
+                    local_url = f"http://localhost:5000/api/tracks/{track_id}/schedule"
+                    req = urllib.request.Request(local_url, headers={"User-Agent": "TrafficAgent/1.0"})
+                    with urllib.request.urlopen(req, timeout=3) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        self.last_schedule_source = "NODE_TIMETABLE_API"
+                        self.last_schedule_authoritative = True
+                        return data.get("schedules", [])
+                except Exception:
+                    pass
             # Fallback if node server not reachable
             self.last_schedule_source = "FALLBACK_FIXTURE"
             self.last_schedule_authoritative = False
