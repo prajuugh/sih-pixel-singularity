@@ -1,7 +1,5 @@
 import { useState } from "react";
-import UserMenu from "../../components/common/UserMenu";
 import {
-  Train,
   Calendar,
   Plus,
   Users,
@@ -12,8 +10,10 @@ import {
   Pencil,
   Trash2,
   ChevronDown,
-  X,
 } from "lucide-react";
+import Button from "../../components/common/Button";
+import Modal from "../../components/common/Modal";
+import Navbar from "../../components/common/Navbar";
 
 const initialUsers = [
   { id: 1, username: "admin", email: "admin@rbps.com", role: "Admin", department: "—" },
@@ -78,58 +78,43 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-green-800 text-white flex items-center justify-between px-8 py-4">
-        <div className="flex items-center gap-3">
-          <Train size={26} />
-          <div>
-            <h1 className="font-bold text-lg leading-tight">RAILWAY BLOCK PLANNING SYSTEM</h1>
-            <p className="text-xs text-green-200 tracking-wide">ADMIN PORTAL</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="text-sm text-right leading-tight">
-            <p>Safe Tracks</p>
-            <p>Reliable Journeys</p>
-          </div>
-          <UserMenu />
-        </div>
-      </header>
+      <Navbar />
 
-      <main className="max-w-7xl mx-auto px-8 py-8">
-        <div className="flex items-start justify-between mb-6">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 xl:px-8 xl:py-8">
+        <div className="mb-6 flex flex-col items-start justify-between gap-4 lg:flex-row">
           <div>
-            <p className="text-xs font-semibold text-green-700 tracking-wider mb-1">USERS</p>
+            <p className="mb-1 text-xs font-semibold text-[#cf432c]">Administration</p>
             <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
             <p className="text-gray-500 text-sm mt-1">
               Manage system users and their access to the Railway Block Planning System.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-2 rounded-lg">
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600">
               <Calendar size={16} />
               Wednesday, 10 September 2026
             </div>
-            <button
+            <Button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              icon={Plus}
+              className="bg-[#171918] px-4 py-2 text-sm hover:bg-black"
             >
-              <Plus size={16} />
               Add New User
-            </button>
+            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <StatCard icon={<Users size={22} className="text-green-700" />} label="Total Users" value={users.length} delta="+2 from last month" />
-          <StatCard icon={<Users size={22} className="text-green-700" />} label="Management Team" value={users.filter((u) => u.role === "Teams").length} delta="+1 from last month" />
-          <StatCard icon={<Shield size={22} className="text-green-700" />} label="Officers" value={users.filter((u) => u.role === "Officer").length} delta="0 from last month" />
-          <StatCard icon={<Settings size={22} className="text-green-700" />} label="Admins" value={users.filter((u) => u.role === "Admin").length} delta="+1 from last month" />
+        <div className="mb-6 grid grid-cols-2 overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgb(0_0_0/0.04),0_16px_40px_rgb(15_23_42/0.06)] ring-1 ring-black/[0.06] lg:grid-cols-4">
+          <StatCard icon={<Users size={22} className="text-[#cf432c]" />} label="Total Users" value={users.length} delta="+2 from last month" />
+          <StatCard icon={<Users size={22} className="text-[#cf432c]" />} label="Management Team" value={users.filter((u) => u.role === "Teams").length} delta="+1 from last month" />
+          <StatCard icon={<Shield size={22} className="text-[#cf432c]" />} label="Officers" value={users.filter((u) => u.role === "Officer").length} delta="0 from last month" />
+          <StatCard icon={<Settings size={22} className="text-[#cf432c]" />} label="Admins" value={users.filter((u) => u.role === "Admin").length} delta="+1 from last month" />
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+        <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
-              <Users size={18} className="text-green-700" />
+              <Users size={18} className="text-[#cf432c]" />
               Users by Department
             </div>
             <span className="text-sm text-gray-500">Total Users: {users.length}</span>
@@ -140,32 +125,45 @@ export default function AdminDashboard() {
           <DeptBar label="Control (Officers)" count={users.filter((u) => u.department === "Control").length} total={users.length} />
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 font-semibold text-gray-800">
-              <Users size={18} className="text-green-700" />
+              <Users size={18} className="text-[#cf432c]" />
               All Users
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center border border-gray-300 rounded-lg px-3 py-2 w-64">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex w-64 items-center rounded-lg border border-gray-300 px-3 py-2 transition-[border-color,box-shadow] duration-150 focus-within:border-[#cf432c] focus-within:ring-2 focus-within:ring-[#cf432c]/15">
                 <Search size={16} className="text-gray-400 mr-2" />
                 <input
                   type="text"
+                  aria-label="Search users"
                   placeholder="Search by name, username or department..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full outline-none text-sm"
                 />
               </div>
-              <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
-                <Filter size={14} className="text-green-700" />
-                {deptFilter}
-                <ChevronDown size={14} />
-              </div>
+              <label className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700">
+                <Filter size={14} className="text-[#cf432c]" />
+                <select
+                  aria-label="Filter users by department"
+                  value={deptFilter}
+                  onChange={(event) => setDeptFilter(event.target.value)}
+                  className="appearance-none bg-transparent pr-5 outline-none"
+                >
+                  <option>All Departments</option>
+                  <option>Engineering</option>
+                  <option>Signal & Telecom</option>
+                  <option>Traction</option>
+                  <option>Control</option>
+                </select>
+                <ChevronDown size={14} className="-ml-5 pointer-events-none" />
+              </label>
             </div>
           </div>
 
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-200">
                 <th className="py-2 font-medium">#</th>
@@ -178,7 +176,7 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {filteredUsers.map((u, i) => (
-                <tr key={u.id} className="border-b border-gray-100 last:border-0">
+                <tr key={u.id} className="border-b border-gray-100 transition-colors duration-150 last:border-0 hover:bg-gray-50/70">
                   <td className="py-3 text-gray-500">{i + 1}</td>
                   <td className="py-3 text-gray-700">{u.username}</td>
                   <td className="py-3 text-gray-900 font-medium">{u.email}</td>
@@ -189,22 +187,23 @@ export default function AdminDashboard() {
                   </td>
                   <td className="py-3 text-gray-700">{u.department}</td>
                   <td className="py-3 text-right">
-                    <button className="text-green-700 hover:text-green-900 mr-3">
-                      <Pencil size={16} />
+                    <button aria-label={`Edit ${u.username}`} className="mr-1 inline-flex size-11 items-center justify-center rounded-lg text-[#cf432c] transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-[#8f2c1f] active:scale-[0.96]">
+                      <Pencil size={16} strokeWidth={2} />
                     </button>
-                    <button className="text-red-500 hover:text-red-700">
-                      <Trash2 size={16} />
+                    <button aria-label={`Delete ${u.username}`} className="inline-flex size-11 items-center justify-center rounded-lg text-red-500 transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-red-700 active:scale-[0.96]">
+                      <Trash2 size={16} strokeWidth={2} />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
 
           <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
             <div className="flex items-center gap-2">
               Rows per page:
-              <select className="border border-gray-300 rounded px-2 py-1">
+              <select aria-label="Rows per page" className="border border-gray-300 rounded px-2 py-1">
                 <option>10</option>
                 <option>25</option>
                 <option>50</option>
@@ -216,56 +215,49 @@ export default function AdminDashboard() {
       </main>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form
-            onSubmit={handleAddUser}
-            className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative"
-          >
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X size={20} />
-            </button>
-
+        <Modal onClose={() => setShowModal(false)}>
+          <form onSubmit={handleAddUser}>
             <h3 className="text-lg font-bold text-gray-900 mb-1">Add New User</h3>
             <p className="text-sm text-gray-500 mb-5">
               Create a new user account for the system.
             </p>
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label htmlFor="new-user-name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <input
               type="text"
+              id="new-user-name"
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
               placeholder="Enter full name"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-green-600"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             />
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label htmlFor="new-user-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
               type="email"
+              id="new-user-email"
               value={form.email}
               onChange={(e) => handleFormChange("email", e.target.value)}
               placeholder="Enter email address"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-green-600"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             />
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Initial Password</label>
+            <label htmlFor="new-user-password" className="block text-sm font-medium text-gray-700 mb-1">Initial Password</label>
             <input
               type="text"
+              id="new-user-password"
               value={form.password}
               onChange={(e) => handleFormChange("password", e.target.value)}
               placeholder="Set an initial password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-green-600"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             />
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+            <label htmlFor="new-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
             <select
+              id="new-user-department"
               value={form.department}
               onChange={(e) => handleFormChange("department", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-green-600"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
             >
               <option value="">Select department</option>
               <option value="Engineering">Engineering</option>
@@ -277,22 +269,23 @@ export default function AdminDashboard() {
             {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
             <div className="flex justify-end gap-3 mt-5">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                className="px-4 py-2 text-sm hover:bg-gray-100"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="px-4 py-2 rounded-lg text-sm font-semibold bg-green-800 hover:bg-green-900 text-white"
+                className="px-4 py-2 text-sm"
               >
                 Add User
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -300,12 +293,12 @@ export default function AdminDashboard() {
 
 function StatCard({ icon, label, value, delta }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-3">
-      <div className="bg-green-50 rounded-lg p-2">{icon}</div>
-      <div>
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-green-600">{delta}</p>
+    <div className="flex min-w-0 items-start gap-3 border-b border-r border-gray-100 p-4 sm:p-5">
+      <div className="rounded-xl bg-red-50 p-2.5">{icon}</div>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-medium text-gray-500">{label}</p>
+        <p className="text-2xl font-semibold tracking-tight text-gray-950">{value}</p>
+        <p className="text-xs text-gray-500">{delta}</p>
       </div>
     </div>
   );
@@ -317,7 +310,7 @@ function DeptBar({ label, count, total }) {
     <div className="flex items-center gap-4 mb-3 text-sm">
       <span className="w-48 text-gray-700">{label}</span>
       <div className="flex-1 bg-gray-100 rounded-full h-2.5">
-        <div className="bg-green-700 h-2.5 rounded-full" style={{ width: `${pct}%` }} />
+        <div className="h-2.5 rounded-full bg-[#171918]" style={{ width: `${pct}%` }} />
       </div>
       <span className="w-28 text-right text-gray-500">
         {count} users ({pct}%)

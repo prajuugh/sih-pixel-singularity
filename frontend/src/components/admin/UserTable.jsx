@@ -23,15 +23,17 @@ export default function UserTable({ users, onEdit, onDelete }) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => onEdit?.(u)}
-            className="text-green-700 hover:text-green-900"
+            aria-label={`Edit ${u.username}`}
+            className="inline-flex size-11 items-center justify-center rounded-lg text-green-700 transition-[color,background-color,transform] duration-150 hover:bg-green-50 hover:text-[#8f2c1f] active:scale-[0.96]"
           >
-            <Pencil size={16} />
+            <Pencil size={16} strokeWidth={2} />
           </button>
           <button
             onClick={() => onDelete?.(u)}
-            className="text-red-500 hover:text-red-700"
+            aria-label={`Delete ${u.username}`}
+            className="inline-flex size-11 items-center justify-center rounded-lg text-red-500 transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-red-700 active:scale-[0.96]"
           >
-            <Trash2 size={16} />
+            <Trash2 size={16} strokeWidth={2} />
           </button>
         </div>
       ),

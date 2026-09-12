@@ -12,11 +12,12 @@ import {
   ChevronUp,
   Sparkles,
   Sliders,
-  XCircle,
   TrendingUp,
   Ban,
 } from "lucide-react";
 import { requestStatusStyles } from "../../utils/constants";
+import Modal from "../common/Modal";
+import AgentDecisionTrace from "../common/AgentDecisionTrace";
 
 function computeRevisedPreview(pStart, pEnd, duration = 90) {
   if (!pStart || !pEnd) return null;
@@ -50,6 +51,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
   const [selectedAltId, setSelectedAltId] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showAgentTrace, setShowAgentTrace] = useState(false);
 
   // Prohibited time window state (times on which block cannot be planned)
   const initialProhibited = request.raw?.prohibited_window || request.prohibitedWindow;
@@ -121,6 +123,18 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
     (a) => a.id === selectedAltId || a.type === selectedAltId
   );
   const aiExplanation = request.aiExplanation || request.agentPlan?.explanation;
+  const tracePlan = {
+    ...request.agentPlan,
+    trackId: request.raw?.track_id || request.agentPlan?.trackId,
+    priorityScore,
+    conflict: hasConflict,
+    conflictingTrains,
+    recommendedBlock,
+    alternatives,
+  };
+  const traceTrackIds = request.raw?.track_ids?.length
+    ? request.raw.track_ids
+    : [request.raw?.track_id || request.agentPlan?.trackId].filter(Boolean);
 
   const handleOpenReview = (type, preSelectedAlt = null) => {
     setDecisionType(type);
@@ -189,12 +203,12 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
       : "bg-emerald-50 text-emerald-800 border-emerald-200";
 
   return (
-    <div className="bg-white rounded-xl shadow-xs border border-gray-200 p-5 flex flex-col justify-between gap-4 hover:border-green-300 transition-all relative">
+    <div className="relative flex flex-col justify-between gap-4 rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.06] transition-[box-shadow] duration-150 hover:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_12px_28px_rgb(0_0_0/0.08)]">
       {/* Header with Department, Track, and Live Status */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-green-800 bg-green-100 px-2.5 py-0.5 rounded">
+            <span className="text-xs font-bold text-[#b83825] bg-green-100 px-2.5 py-0.5 rounded">
               {request.department}
             </span>
             <span className="text-xs font-semibold text-gray-500 flex items-center gap-1">
@@ -380,7 +394,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
               </div>
             )}
             <p className="text-emerald-700 text-[11px]">
-              {aiExplanation || "Direct maintenance clearance verified across Karnataka timetable schedules."}
+              {aiExplanation || "Direct maintenance clearance verified across India timetable schedules."}
             </p>
           </div>
         )
@@ -391,7 +405,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
         <button
           type="button"
           onClick={() => setShowBreakdown(!showBreakdown)}
-          className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-green-800 transition-colors cursor-pointer"
+          className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-[#b83825] transition-colors cursor-pointer"
         >
           <TrendingUp size={12} />
           <span>MCDA Priority Factor Breakdown</span>
@@ -428,6 +442,36 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
         )}
       </div>
 
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowAgentTrace((open) => !open)}
+          className="flex w-full items-center justify-between rounded-lg border border-[#e3e5e4] bg-[#f8f9f8] px-3 py-2.5 text-left transition-colors hover:border-[#d4d8d6] hover:bg-white"
+          aria-expanded={showAgentTrace}
+        >
+          <span>
+            <span className="block text-xs font-semibold text-[#171918]">Inspect agent decision trace</span>
+            <span className="mt-0.5 block text-[11px] text-gray-500">Inputs, evidence, scoring and human checkpoint</span>
+          </span>
+          {showAgentTrace ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {showAgentTrace && (
+          <div className="mt-2">
+            <AgentDecisionTrace
+              compact
+              requestId={request.id}
+              trackIds={traceTrackIds}
+              requestedWindow={{
+                startTime: request.raw?.preferred_start_time,
+                endTime: request.raw?.preferred_end_time,
+              }}
+              agentPlan={tracePlan}
+              status={request.status}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Operational Approval Options Preview */}
       {alternatives.length > 0 && (
         <div className="space-y-1.5">
@@ -442,19 +486,20 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
             {alternatives.map((alt, idx) => {
               const isSelected = selectedAltId === alt.id || selectedAltId === alt.type;
               return (
-                <div
+                <button
+                  type="button"
                   key={alt.id || idx}
                   onClick={() => handleOpenReview("APPROVED", alt)}
-                  className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all text-xs ${
+                  className={`flex w-full cursor-pointer items-center justify-between rounded-lg border p-2.5 text-left text-xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
                     isSelected
-                      ? "border-green-600 bg-green-50/90 shadow-2xs ring-1 ring-green-600"
+                      ? "border-[#cf432c] bg-green-50/90 shadow-2xs ring-1 ring-[#cf432c]"
                       : "border-gray-200 bg-white hover:border-green-400 hover:bg-green-50/40"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                        isSelected ? "bg-green-800 text-white" : "bg-gray-100 text-gray-700"
+                        isSelected ? "bg-[#171918] text-white" : "bg-gray-100 text-gray-700"
                       }`}
                     >
                       {alt.type}
@@ -473,7 +518,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -484,19 +529,19 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
       <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
         <button
           onClick={() => handleOpenReview("APPROVED")}
-          className="flex-1 bg-green-800 hover:bg-green-900 text-white text-xs font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+          className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-[#171918] py-2.5 text-xs font-semibold text-white shadow-2xs transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
         >
           <CheckCircle2 size={14} /> Approve Plan
         </button>
         <button
           onClick={() => handleOpenReview("REVISION_REQUIRED")}
-          className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
+          className="flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-amber-600 py-2.5 text-xs font-semibold text-white shadow-2xs transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-amber-700 active:scale-[0.96]"
         >
           <Sliders size={14} /> Modify Plan
         </button>
         <button
           onClick={() => handleOpenReview("REJECTED")}
-          className="px-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-xs font-semibold py-2.5 rounded-lg transition-colors cursor-pointer"
+          className="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-700 transition-[color,background-color,border-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-red-100 active:scale-[0.96]"
         >
           Decline
         </button>
@@ -504,25 +549,18 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
       {/* Officer Decision & Alternative Selection Modal */}
       {showReviewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Modal onClose={() => setShowReviewModal(false)} maxWidth="max-w-lg">
           <form
             onSubmit={handleSubmitReview}
-            className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 text-sm max-h-[90vh] overflow-y-auto"
+            className="max-h-[80vh] overflow-y-auto pr-1 text-sm"
           >
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-2 flex items-center justify-between pr-10">
               <h3 className="text-base font-bold text-gray-900">
                 Officer Block Decision & Review
               </h3>
-              <button
-                type="button"
-                onClick={() => setShowReviewModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XCircle size={18} />
-              </button>
             </div>
             <p className="text-xs text-gray-500 mb-4">
-              Action: <span className="font-bold text-green-800">{decisionType}</span> for{" "}
+              Action: <span className="font-bold text-[#b83825]">{decisionType}</span> for{" "}
               <span className="font-mono font-bold text-gray-800">{request.id}</span>
             </p>
 
@@ -545,12 +583,13 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                 {/* Time Selection Fields */}
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                    <label htmlFor={`${request.id}-prohibited-start`} className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
                       <Clock size={12} className="text-amber-700" />
                       Prohibited From Time:
                     </label>
                     <input
                       type="time"
+                      id={`${request.id}-prohibited-start`}
                       value={prohibitedStartTime}
                       onChange={(e) => {
                         const newStart = e.target.value;
@@ -562,12 +601,13 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                    <label htmlFor={`${request.id}-prohibited-end`} className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
                       <Clock size={12} className="text-amber-700" />
                       Prohibited Until Time:
                     </label>
                     <input
                       type="time"
+                      id={`${request.id}-prohibited-end`}
                       value={prohibitedEndTime}
                       onChange={(e) => {
                         const newEnd = e.target.value;
@@ -604,7 +644,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                           setProhibitedEndTime(preset.end);
                           setFeedback(`Corridor possession prohibited between ${preset.start} and ${preset.end}. Requesting entire block plan revision.`);
                         }}
-                        className={`text-[10px] px-2 py-1 rounded-md border font-medium cursor-pointer transition-all ${
+                        className={`cursor-pointer rounded-md border px-2 py-1 text-[10px] font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
                           prohibitedStartTime === preset.start && prohibitedEndTime === preset.end
                             ? "bg-amber-600 text-white border-amber-600 shadow-2xs font-semibold"
                             : "bg-white text-gray-700 border-gray-200 hover:bg-amber-100/50"
@@ -678,12 +718,13 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                   {alternatives.map((alt) => {
                     const isSelected = selectedAltId === alt.id || selectedAltId === alt.type;
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={alt.id || alt.type}
                         onClick={() => handleSelectAlternative(alt)}
-                        className={`p-3 rounded-xl border-2 text-xs cursor-pointer transition-all ${
+                        className={`w-full cursor-pointer rounded-xl border-2 p-3 text-left text-xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
                           isSelected
-                            ? "border-green-600 bg-green-50/90 shadow-xs ring-2 ring-green-500/20"
+                            ? "border-[#cf432c] bg-green-50/90 shadow-xs ring-2 ring-green-500/20"
                             : "border-gray-200 hover:border-gray-300 bg-white"
                         }`}
                       >
@@ -692,13 +733,13 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                             <div
                               className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                                 isSelected
-                                  ? "border-green-600 bg-green-600 text-white"
+                                  ? "border-[#cf432c] bg-green-600 text-white"
                                   : "border-gray-300"
                               }`}
                             >
                               {isSelected && <CheckCircle2 size={12} />}
                             </div>
-                            <span className="text-green-900 font-mono font-bold text-xs">
+                            <span className="text-[#8f2c1f] font-mono font-bold text-xs">
                               {alt.type} {alt.rank ? `(Rank #${alt.rank})` : ""}
                             </span>
                           </div>
@@ -710,7 +751,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                         <span className="text-[10px] text-amber-700 font-semibold block mt-1.5 pl-6">
                           Operational Impact: {alt.trainImpact || "Negligible"}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -724,14 +765,15 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
               </div>
             )}
 
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
+            <label htmlFor={`${request.id}-feedback`} className="block text-xs font-semibold text-gray-700 mb-1">
               Operational Directives & Written Feedback
             </label>
             <textarea
+              id={`${request.id}-feedback`}
               rows={3}
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600"
+              className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:border-[#cf432c] focus:ring-1 focus:ring-[#cf432c]"
               placeholder="Provide directives for maintenance team and control office..."
               required
             />
@@ -752,7 +794,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
                     ? "bg-amber-600 hover:bg-amber-700 cursor-pointer"
                     : decisionType === "APPROVED" && !selectedAltId
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed opacity-70"
-                    : "bg-green-800 hover:bg-green-900 cursor-pointer shadow-xs"
+                    : "bg-[#171918] hover:bg-black cursor-pointer shadow-xs"
                 }`}
               >
                 {decisionType === "REVISION_REQUIRED" ? (
@@ -775,7 +817,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

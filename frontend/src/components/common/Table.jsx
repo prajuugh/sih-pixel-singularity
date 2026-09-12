@@ -7,12 +7,12 @@ export default function Table({ columns, rows, rowKey = "id", emptyMessage = "No
     typeof rowKey === "function" ? rowKey(row) : row[rowKey] ?? i;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-[#e3e5e4]">
       <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="text-gray-500 border-b border-gray-100">
+        <thead className="bg-gray-50/80">
+          <tr className="border-b border-gray-100 text-gray-500">
             {columns.map((col) => (
-              <th key={col.key} className="py-2 px-2 font-semibold">
+              <th key={col.key} className="px-3 py-2.5 font-semibold">
                 {col.header}
               </th>
             ))}
@@ -21,15 +21,18 @@ export default function Table({ columns, rows, rowKey = "id", emptyMessage = "No
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="py-6 px-2 text-center text-gray-400">
+              <td colSpan={columns.length} className="px-3 py-10 text-center text-gray-400">
                 {emptyMessage}
               </td>
             </tr>
           ) : (
             rows.map((row, i) => (
-              <tr key={getKey(row, i)} className="border-b border-gray-100 last:border-0">
+              <tr
+                key={getKey(row, i)}
+                className="border-b border-gray-100 transition-colors duration-150 last:border-0 hover:bg-gray-50/70"
+              >
                 {columns.map((col) => (
-                  <td key={col.key} className="py-3 px-2 text-gray-700">
+                  <td key={col.key} className="px-3 py-3 text-gray-700">
                     {col.render ? col.render(row, i) : row[col.key]}
                   </td>
                 ))}

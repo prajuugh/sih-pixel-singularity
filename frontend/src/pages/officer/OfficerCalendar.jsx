@@ -57,10 +57,10 @@ export default function OfficerCalendar() {
       <Navbar />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-8">
+        <main className="min-w-0 flex-1 p-4 pb-20 md:p-6 md:pb-6 xl:p-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
-              <CalendarDays className="text-green-800" size={24} />
+              <CalendarDays className="text-[#b83825]" size={24} />
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Maintenance Calendar</h2>
                 <p className="text-gray-500 text-sm">
@@ -71,9 +71,10 @@ export default function OfficerCalendar() {
 
             <div className="flex items-center gap-3">
               <select
+                aria-label="Calendar view"
                 value={viewMode}
                 onChange={(e) => setViewMode(e.target.value)}
-                className="border border-green-700 text-green-800 font-semibold rounded-lg px-3 py-2"
+                className="border border-[#cf432c] text-[#b83825] font-semibold rounded-lg px-3 py-2"
               >
                 <option>Monthly</option>
                 <option>Weekly</option>
@@ -81,23 +82,23 @@ export default function OfficerCalendar() {
               </select>
               <button
                 onClick={() => setCursor(new Date())}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg"
+                className="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-700 transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-gray-200 active:scale-[0.96]"
               >
                 Today
               </button>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
             <div className="flex items-center justify-between mb-4">
-              <button onClick={() => changeMonth(-1)} className="p-2 rounded hover:bg-gray-50">
-                <ChevronLeft size={18} />
+              <button aria-label="Previous month" onClick={() => changeMonth(-1)} className="inline-flex size-10 items-center justify-center rounded-xl transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-gray-100 active:scale-[0.96]">
+                <ChevronLeft size={18} strokeWidth={2} />
               </button>
-              <h3 className="font-bold text-green-800 text-lg">
+              <h3 className="font-bold text-[#b83825] text-lg">
                 {monthNames[month]} {year}
               </h3>
-              <button onClick={() => changeMonth(1)} className="p-2 rounded hover:bg-gray-50">
-                <ChevronRight size={18} />
+              <button aria-label="Next month" onClick={() => changeMonth(1)} className="inline-flex size-10 items-center justify-center rounded-xl transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-gray-100 active:scale-[0.96]">
+                <ChevronRight size={18} strokeWidth={2} />
               </button>
             </div>
 
@@ -127,11 +128,11 @@ export default function OfficerCalendar() {
                     key={i}
                     disabled={cell.muted}
                     onClick={() => cell.key && setSelectedKey(cell.key)}
-                    className={`h-16 border border-gray-50 flex flex-col items-center justify-start pt-2 gap-1 ${
-                      cell.muted ? "text-gray-300" : "text-gray-700 hover:bg-green-50"
-                    } ${isSelected ? "bg-green-50 ring-1 ring-green-300" : ""}`}
+                    className={`flex h-16 flex-col items-center justify-start gap-1 border border-gray-50 pt-2 transition-[color,background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
+                      cell.muted ? "text-gray-300" : "text-gray-700 hover:bg-[#fff5f2]"
+                    } ${isSelected ? "bg-[#fff5f2] ring-1 ring-[#cf432c]/30" : ""}`}
                   >
-                    <span className={isSelected ? "font-bold text-green-800" : ""}>
+                    <span className={isSelected ? "font-bold text-[#b83825]" : ""}>
                       {cell.day}
                     </span>
                     {hasTask && <span className="w-1.5 h-1.5 rounded-full bg-green-600" />}
@@ -141,7 +142,7 @@ export default function OfficerCalendar() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+          <div className="mt-6 rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
             <h3 className="font-bold text-gray-900 mb-4">
               Tasks on {selectedKey ? new Date(selectedKey).toDateString() : "—"}
             </h3>

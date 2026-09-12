@@ -9,7 +9,7 @@ import { fetchRequests, updateRequestStatus } from "../../utils/api";
 
 export default function OfficerRequests() {
   const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const loadRequests = async () => {
     setLoading(true);
@@ -24,7 +24,25 @@ export default function OfficerRequests() {
   };
 
   useEffect(() => {
-    loadRequests();
+    let active = true;
+    const refreshQueue = () => {
+      fetchRequests()
+        .then((data) => {
+          if (active) setRequests(data);
+        })
+        .catch((err) => console.error("Could not refresh request queue:", err))
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+    refreshQueue();
+    const interval = window.setInterval(() => {
+      refreshQueue();
+    }, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   const handleDecision = async (request, decisionType, feedback, alternativeId = null, prohibitedWindow = null) => {
@@ -90,11 +108,11 @@ export default function OfficerRequests() {
       <Navbar />
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 p-8">
+        <main className="min-w-0 flex-1 p-4 pb-20 md:p-6 md:pb-6 xl:p-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <ClipboardCheck className="text-green-800" size={24} />
+                <ClipboardCheck className="text-[#b83825]" size={24} />
                 <h2 className="text-2xl font-bold text-gray-900">Officer Maintenance Requests Review</h2>
               </div>
               <p className="text-gray-500 text-sm">
@@ -105,7 +123,7 @@ export default function OfficerRequests() {
             <div className="flex items-center gap-2.5">
               <Link
                 to="/officer/approved-requests"
-                className="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-800 hover:bg-green-100 text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-2xs"
+                className="flex items-center gap-1.5 rounded-lg border border-[#efc5bd] bg-[#fff5f2] px-3.5 py-2 text-xs font-semibold text-[#b83825] transition-[color,background-color,border-color,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[#fbeae7] active:scale-[0.96]"
               >
                 <CheckCircle2 size={14} className="text-green-600" />
                 <span>Approved Requests ({approvedCount})</span>
@@ -114,7 +132,7 @@ export default function OfficerRequests() {
               <button
                 onClick={loadRequests}
                 disabled={loading}
-                className="flex items-center gap-2 bg-white border border-gray-200 hover:border-green-300 hover:text-green-800 text-gray-700 text-xs font-semibold px-4 py-2 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 shadow-2xs transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:border-green-300 hover:text-[#b83825] active:scale-[0.96]"
               >
                 <RotateCw size={14} className={loading ? "animate-spin" : ""} />
                 <span>Refresh</span>
@@ -144,7 +162,7 @@ export default function OfficerRequests() {
                 </span>
                 <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
               </span>
-              <p className="text-xl font-bold text-green-800 mt-0.5">{approvedCount}</p>
+              <p className="text-xl font-bold text-[#b83825] mt-0.5">{approvedCount}</p>
             </Link>
             <div className="bg-white border border-gray-100 rounded-xl p-3.5 shadow-2xs">
               <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
@@ -164,7 +182,7 @@ export default function OfficerRequests() {
               <div className="mt-5">
                 <Link
                   to="/officer/approved-requests"
-                  className="inline-flex items-center gap-2 bg-green-800 hover:bg-green-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#171918] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-[background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-black active:scale-[0.96]"
                 >
                   <CheckCircle2 size={15} />
                   <span>View All Approved Requests ({approvedCount})</span>

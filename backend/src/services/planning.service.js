@@ -1,6 +1,7 @@
 // backend/src/services/planning.service.js
 const { fallbackStore } = require("../config/database");
 const { callPythonAgentService } = require("./agent.service");
+const { persistLocalStore } = require("./local-store.service");
 
 async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
   const planId = `PLAN-${horizon}-${Date.now().toString().slice(-6)}`;
@@ -89,6 +90,8 @@ async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
       }
     }
   }
+
+  persistLocalStore(fallbackStore);
 
   return {
     plan: newPlan,

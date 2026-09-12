@@ -9,14 +9,16 @@ import {
   Clock,
   MapPin,
   Send,
-  AlertCircle,
-  CheckCircle2,
   Lock,
   Hash,
+  ArrowLeft,
+  Copy,
+  Check,
 } from "lucide-react";
 import Button from "../common/Button";
 import { useAuth } from "../../hooks/useAuth";
 import TrackPickerMap from "./TrackPickerMap";
+import { buildRequestId, fetchRequests } from "../../utils/api";
 import {
   departments,
   assetTypes,
@@ -24,12 +26,12 @@ import {
   assetConditions,
 } from "../../utils/constants";
 
-function Field({ label, icon: Icon, required, compact, children, subtitle }) {
+function Field({ label, htmlFor, icon: Icon, required, compact, children, subtitle }) {
   return (
     <div className={compact ? "" : "mb-5"}>
       <div className="flex items-center justify-between mb-1.5">
-        <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-          <Icon size={16} className="text-green-800" />
+        <label htmlFor={htmlFor} className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <Icon size={16} className="text-[#b83825]" />
           {label}
           {required && <span className="text-red-500">*</span>}
         </label>
@@ -40,7 +42,6 @@ function Field({ label, icon: Icon, required, compact, children, subtitle }) {
   );
 }
 
-// Duration chip presets
 const DURATION_PRESETS = [
   { label: "1 hr", minutes: 60 },
   { label: "1.5 hrs", minutes: 90 },
@@ -49,10 +50,9 @@ const DURATION_PRESETS = [
   { label: "4 hrs", minutes: 240 },
 ];
 
-export default function RequestForm({ initialRequestId, onSubmit }) {
+export default function RequestForm({ initialRequestId, onSubmit, step, onStepChange }) {
   const { user } = useAuth();
 
-  // Helper to resolve user's department
   const resolveUserDepartment = () => {
     if (!user?.department) return departments[0];
     const uDept = user.department.toLowerCase();
@@ -81,13 +81,41 @@ export default function RequestForm({ initialRequestId, onSubmit }) {
   });
 
   const [mapError, setMapError] = useState("");
+  const [idCopied, setIdCopied] = useState(false);
 
-  // Keep department in sync if user changes
   useEffect(() => {
     if (user?.department) {
       setForm((prev) => ({ ...prev, department: resolveUserDepartment() }));
     }
   }, [user]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchRequests()
+      .then((rows) => {
+        if (!alive) return;
+        setForm((prev) => ({
+          ...prev,
+          requestId: buildRequestId(prev.department, rows?.length || 0),
+        }));
+      })
+      .catch(() => {
+        if (!alive) return;
+        setForm((prev) => ({
+          ...prev,
+          requestId: buildRequestId(prev.department, 3),
+        }));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (step === "details") {
+      document.getElementById("asset-type")?.focus();
+    }
+  }, [step]);
 
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -110,12 +138,20 @@ export default function RequestForm({ initialRequestId, onSubmit }) {
     setForm((prev) => ({ ...prev, trackIds: [] }));
   };
 
+  const handleContinue = () => {
+    if (form.trackIds.length === 0) {
+      setMapError("Claim at least one track before specifying the work.");
+      return;
+    }
+    setMapError("");
+    onStepChange("details");
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (form.trackIds.length === 0) {
-      setMapError("Please click on at least one railway track segment on the map.");
-      const mapElement = document.getElementById("track-picker-section");
-      mapElement?.scrollIntoView({ behavior: "smooth" });
+      setMapError("Claim at least one track before specifying the work.");
+      onStepChange("map");
       return;
     }
     setMapError("");
@@ -123,209 +159,256 @@ export default function RequestForm({ initialRequestId, onSubmit }) {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl space-y-5"
-    >
-      {/* Request ID & Department */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <Field label="Request Tracking ID" icon={Hash} subtitle="System-assigned tracking ID">
-          <div className="relative">
-            <input
-              type="text"
-              value={form.requestId === "Auto-Generated" ? "Assigned on submission (e.g. ENG-2026-...)" : form.requestId}
-              readOnly
-              className="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2.5 text-gray-700 font-mono text-sm font-semibold cursor-not-allowed"
-            />
-            <div className="absolute right-3 top-3 flex items-center gap-1 text-xs text-gray-500 bg-gray-200/80 px-2 py-0.5 rounded font-mono">
-              <span>Auto-ID</span>
-            </div>
-          </div>
-        </Field>
-
-        <Field label="Department" icon={Building2} required subtitle="Auto-assigned from user account">
-          <div className="relative">
-            <input
-              type="text"
-              value={form.department}
-              readOnly
-              className="w-full border border-green-200 bg-green-50/60 rounded-lg px-3 py-2.5 text-green-900 font-semibold cursor-not-allowed"
-            />
-            <div className="absolute right-3 top-3 flex items-center gap-1 text-xs text-green-700 bg-green-100/80 px-2 py-0.5 rounded">
-              <Lock size={12} />
-              <span>Verified Role</span>
-            </div>
-          </div>
-        </Field>
-      </div>
-
-      {/* Asset Type & Condition */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <Field label="Asset Type" icon={Layers} required>
-          <select
-            value={form.assetType}
-            onChange={handleChange("assetType")}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-medium focus:ring-2 focus:ring-green-600 focus:outline-none"
-          >
-            {assetTypes.map((a) => (
-              <option key={a}>{a}</option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Asset Condition" icon={Settings} required>
-          <select
-            value={form.assetCondition}
-            onChange={handleChange("assetCondition")}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-medium focus:ring-2 focus:ring-green-600 focus:outline-none"
-          >
-            {assetConditions.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </Field>
-      </div>
-
-      {/* Maintenance Type */}
-      <Field label="Maintenance Type" icon={Wrench} required>
-        <select
-          value={form.maintenanceType}
-          onChange={handleChange("maintenanceType")}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-medium focus:ring-2 focus:ring-green-600 focus:outline-none"
-        >
-          {maintenanceTypes.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-      </Field>
-
-      {/* Date Range: From Date & To Date */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <Field label="From Date" icon={Calendar} required compact>
-          <input
-            type="date"
-            value={form.fromDate}
-            onChange={handleChange("fromDate")}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-700 focus:ring-2 focus:ring-green-600 focus:outline-none"
-            required
-          />
-        </Field>
-        <Field label="To Date" icon={Calendar} required compact>
-          <input
-            type="date"
-            value={form.toDate}
-            onChange={handleChange("toDate")}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-700 focus:ring-2 focus:ring-green-600 focus:outline-none"
-            required
-          />
-        </Field>
-      </div>
-
-      {/* Duration (Replaces Start and End Time) */}
-      <Field
-        label="Required Block Duration"
-        icon={Clock}
-        required
-        subtitle="Estimated track possession needed"
-      >
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <input
-                type="number"
-                min={15}
-                max={720}
-                step={15}
-                value={form.durationMinutes}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    durationMinutes: Math.max(15, Number(e.target.value) || 0),
-                  }))
-                }
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-semibold focus:ring-2 focus:ring-green-600 focus:outline-none pr-16"
-                required
-              />
-              <span className="absolute right-3 top-3 text-xs font-medium text-gray-400">
-                minutes
-              </span>
-            </div>
-            <span className="text-xs text-gray-500 whitespace-nowrap bg-gray-100 px-2.5 py-2 rounded-lg font-medium">
-              ≈ {(form.durationMinutes / 60).toFixed(1)} hrs
-            </span>
-          </div>
-
-          {/* Preset Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">Quick Select:</span>
-            {DURATION_PRESETS.map((preset) => (
-              <button
-                key={preset.minutes}
-                type="button"
-                onClick={() =>
-                  setForm((prev) => ({ ...prev, durationMinutes: preset.minutes }))
-                }
-                className={`px-2.5 py-1 text-xs rounded-md transition-all cursor-pointer ${
-                  form.durationMinutes === preset.minutes
-                    ? "bg-green-800 text-white font-semibold shadow-xs"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Field>
-
-      {/* Location / Interactive Leaflet Track Map Picker (Multi-Segment) */}
-      <div id="track-picker-section" className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <MapPin size={16} className="text-green-800" />
-            Track Segment Location
-            <span className="text-red-500">*</span>
-          </label>
-          <span className="text-xs text-gray-400">
-            Click multiple segments to build block possession zone
-          </span>
-        </div>
-
+    <>
+      <div className={step === "map" ? "absolute inset-0" : "hidden"}>
         <TrackPickerMap
           selectedTrackIds={form.trackIds}
           onToggleTrack={handleToggleTrack}
           onClearAll={handleClearAllTracks}
+          onContinue={handleContinue}
+          continueError={mapError}
+          active={step === "map"}
         />
-
-        {mapError && (
-          <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg mt-2">
-            <AlertCircle size={14} className="shrink-0" />
-            <span>{mapError}</span>
-          </div>
-        )}
       </div>
 
-      {/* Work Description */}
-      <Field label="Work Description" icon={FileText} required>
-        <textarea
-          value={form.workDescription}
-          onChange={handleChange("workDescription")}
-          maxLength={500}
-          rows={3}
-          placeholder="Describe the nature of the maintenance work, track condition, and safety precautions..."
-          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-700 resize-none focus:ring-2 focus:ring-green-600 focus:outline-none"
-          required
-        />
-        <div className="flex justify-between items-center text-xs text-gray-400 mt-1">
-          <span>Be specific to assist the Officer and AI planning scheduler.</span>
-          <span>{form.workDescription.length}/500</span>
-        </div>
-      </Field>
+      {step === "details" && (
+        <form
+          onSubmit={handleSubmit}
+          className="max-w-3xl space-y-5 rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]"
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#b83825]">
+                Step 2 of 2 · Specify the work
+              </p>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight text-gray-950">
+                Corridor claimed. Describe the possession.
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => onStepChange("map")}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#b83825] transition-[background-color,transform] duration-150 hover:bg-green-50 active:scale-[0.96]"
+            >
+              <ArrowLeft size={14} />
+              Back to map
+            </button>
+          </div>
 
-      <Button type="submit" icon={Send} fullWidth className="mt-2 py-3 text-base">
-        Submit Maintenance Request
-      </Button>
-    </form>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+                <MapPin size={16} className="text-[#b83825]" />
+                {form.trackIds.length === 1
+                  ? "1 track in possession"
+                  : `${form.trackIds.length} tracks in possession`}
+              </label>
+              <button
+                type="button"
+                onClick={() => onStepChange("map")}
+                className="text-xs font-semibold text-[#b83825] hover:underline"
+              >
+                Change corridor
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {form.trackIds.map((tid) => (
+                <span
+                  key={tid}
+                  className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 font-mono text-xs font-bold text-emerald-900"
+                >
+                  {tid}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field label="Request Tracking ID" htmlFor="request-id" icon={Hash} subtitle="Copy this ID after you submit">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="request-id"
+                  value={form.requestId === "Auto-Generated" ? "Assigning…" : form.requestId}
+                  readOnly
+                  className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 font-mono text-sm font-semibold text-gray-800"
+                />
+                <button
+                  type="button"
+                  disabled={form.requestId === "Auto-Generated"}
+                  onClick={() => {
+                    navigator.clipboard.writeText(form.requestId);
+                    setIdCopied(true);
+                    setTimeout(() => setIdCopied(false), 2000);
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-[background-color,transform] duration-150 hover:bg-gray-50 active:scale-[0.96] disabled:opacity-40"
+                >
+                  {idCopied ? <Check size={14} className="text-green-700" /> : <Copy size={14} />}
+                  {idCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Department" htmlFor="request-department" icon={Building2} required subtitle="Auto-assigned from user account">
+              <div className="relative">
+                <input
+                  type="text"
+                  id="request-department"
+                  value={form.department}
+                  readOnly
+                  className="w-full border border-green-200 bg-green-50/60 rounded-lg px-3 py-2.5 text-[#8f2c1f] font-semibold cursor-not-allowed"
+                />
+                <div className="absolute right-3 top-3 flex items-center gap-1 text-xs text-green-700 bg-green-100/80 px-2 py-0.5 rounded">
+                  <Lock size={12} />
+                  <span>Verified Role</span>
+                </div>
+              </div>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field label="Asset Type" htmlFor="asset-type" icon={Layers} required>
+              <select
+                id="asset-type"
+                value={form.assetType}
+                onChange={handleChange("assetType")}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-medium focus:ring-2 focus:ring-[#cf432c] focus:outline-none"
+              >
+                {assetTypes.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Asset Condition" htmlFor="asset-condition" icon={Settings} required>
+              <select
+                id="asset-condition"
+                value={form.assetCondition}
+                onChange={handleChange("assetCondition")}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-medium focus:ring-2 focus:ring-[#cf432c] focus:outline-none"
+              >
+                {assetConditions.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Maintenance Type" htmlFor="maintenance-type" icon={Wrench} required>
+            <select
+              id="maintenance-type"
+              value={form.maintenanceType}
+              onChange={handleChange("maintenanceType")}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-medium focus:ring-2 focus:ring-[#cf432c] focus:outline-none"
+            >
+              {maintenanceTypes.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <Field label="From Date" htmlFor="from-date" icon={Calendar} required compact>
+              <input
+                type="date"
+                id="from-date"
+                value={form.fromDate}
+                onChange={handleChange("fromDate")}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-700 focus:ring-2 focus:ring-[#cf432c] focus:outline-none"
+                required
+              />
+            </Field>
+            <Field label="To Date" htmlFor="to-date" icon={Calendar} required compact>
+              <input
+                type="date"
+                id="to-date"
+                value={form.toDate}
+                onChange={handleChange("toDate")}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-700 focus:ring-2 focus:ring-[#cf432c] focus:outline-none"
+                required
+              />
+            </Field>
+          </div>
+
+          <Field
+            label="Required Block Duration"
+            htmlFor="duration-minutes"
+            icon={Clock}
+            required
+            subtitle="Estimated track possession needed"
+          >
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    id="duration-minutes"
+                    min={15}
+                    max={720}
+                    step={15}
+                    value={form.durationMinutes}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        durationMinutes: Math.max(15, Number(e.target.value) || 0),
+                      }))
+                    }
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 font-semibold focus:ring-2 focus:ring-[#cf432c] focus:outline-none pr-16"
+                    required
+                  />
+                  <span className="absolute right-3 top-3 text-xs font-medium text-gray-400">
+                    minutes
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap bg-gray-100 px-2.5 py-2 rounded-lg font-medium">
+                  ≈ {(form.durationMinutes / 60).toFixed(1)} hrs
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-400 font-medium">Quick Select:</span>
+                {DURATION_PRESETS.map((preset) => (
+                  <button
+                    key={preset.minutes}
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, durationMinutes: preset.minutes }))
+                    }
+                    className={`cursor-pointer rounded-md px-2.5 py-1 text-xs transition-[color,background-color,box-shadow,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${
+                      form.durationMinutes === preset.minutes
+                        ? "bg-[#171918] text-white font-semibold shadow-xs"
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Field>
+
+          <Field label="Work Description" htmlFor="work-description" icon={FileText} required>
+            <textarea
+              id="work-description"
+              value={form.workDescription}
+              onChange={handleChange("workDescription")}
+              maxLength={500}
+              rows={3}
+              placeholder="Describe the nature of the maintenance work, track condition, and safety precautions..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-gray-700 resize-none focus:ring-2 focus:ring-[#cf432c] focus:outline-none"
+              required
+            />
+            <div className="flex justify-between items-center text-xs text-gray-400 mt-1">
+              <span>Be specific to assist the Officer and AI planning scheduler.</span>
+              <span>{form.workDescription.length}/500</span>
+            </div>
+          </Field>
+
+          <Button type="submit" icon={Send} fullWidth className="mt-2 py-3 text-base">
+            Submit Maintenance Request
+          </Button>
+        </form>
+      )}
+    </>
   );
 }
-

@@ -25,10 +25,10 @@ export default function RecentActivityTable({ activity }) {
   ];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+    <div className="mb-6 rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="bg-green-800 rounded-full p-1.5">
+          <div className="bg-[#171918] rounded-full p-1.5">
             <Clock className="text-white" size={16} />
           </div>
           <h3 className="font-bold text-gray-900">Recent User Activity</h3>

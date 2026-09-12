@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "../pages/LoginPage";
 
@@ -16,9 +17,29 @@ import CheckStatus from "../pages/teams/CheckStatus";
 
 import ProtectedRoute from "./ProtectedRoute";
 
+const LandingPage = lazy(() => import("../pages/LandingPage"));
+
+function LandingFallback() {
+  return (
+    <div
+      className="min-h-screen bg-white"
+      role="status"
+      aria-label="Loading Railway Block Planning System"
+    />
+  );
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
+      <Route
+        path="/"
+        element={
+          <Suspense fallback={<LandingFallback />}>
+            <LandingPage />
+          </Suspense>
+        }
+      />
       <Route path="/login" element={<LoginPage />} />
 
       {/* Admin */}
@@ -30,15 +51,6 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute allowedRole="admin">
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
-      />
-
       {/* Officer */}
       <Route
         path="/officer"

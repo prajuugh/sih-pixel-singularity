@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Train, User, ChevronDown, LogOut, X } from "lucide-react";
+import { Train, User, ChevronDown, LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { APP_NAME, APP_TAGLINE_1, APP_TAGLINE_2 } from "../../utils/constants";
+import Modal from "./Modal";
 
 const portalLabels = {
-  admin: "ADMIN PORTAL",
-  officer: "OFFICER PORTAL",
-  teams: "TEAMS PORTAL",
+  admin: "Administration",
+  officer: "Operations",
+  teams: "Maintenance team",
 };
 
 const roleBadgeStyles = {
-  Admin: "bg-red-100 text-red-700",
-  Officer: "bg-blue-100 text-blue-700",
-  Teams: "bg-green-100 text-green-700",
+  admin: "bg-red-100 text-red-700",
+  officer: "bg-blue-100 text-blue-700",
+  teams: "bg-green-100 text-green-700",
 };
 
 export default function Navbar() {
@@ -29,23 +30,25 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="bg-green-800 text-white flex items-center justify-between px-8 py-4 relative">
-        <div className="flex items-center gap-3">
-          <Train size={26} />
-          <div>
-            <h1 className="font-bold text-lg tracking-wide leading-tight">
+      <header className="relative z-20 flex min-h-16 items-center justify-between gap-3 border-b border-[#e3e5e4] bg-white px-4 py-2.5 text-[#171918] sm:px-6 md:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#cf432c] text-white">
+            <Train size={19} strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="max-w-[13rem] truncate text-sm font-bold leading-tight tracking-wide sm:max-w-none sm:text-lg">
               {APP_NAME}
             </h1>
             {user?.role && (
-              <p className="text-xs text-green-200 tracking-wide">
+              <p className="text-xs text-gray-500">
                 {portalLabels[user.role]}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="border-l border-green-400 pl-4 text-sm text-right leading-tight hidden sm:block">
+        <div className="flex shrink-0 items-center gap-2 md:gap-6">
+          <div className="hidden border-l border-gray-200 pl-4 text-right text-sm leading-tight text-gray-500 lg:block">
             <p>{APP_TAGLINE_1}</p>
             <p>{APP_TAGLINE_2}</p>
           </div>
@@ -53,32 +56,38 @@ export default function Navbar() {
           <div className="relative">
             <button
               onClick={() => setMenuOpen((o) => !o)}
-              className="flex items-center gap-2"
+              aria-label="Open user menu"
+              aria-expanded={menuOpen}
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-gray-100"
             >
-              <div className="bg-green-700 rounded-full p-1.5">
-                <User size={18} />
+              <div className="rounded-full bg-[#f2f3f2] p-1.5 text-gray-600">
+                <User size={18} strokeWidth={2} />
               </div>
-              <span className="font-medium">{user?.name || user?.username}</span>
-              <ChevronDown size={16} />
+              <span className="hidden font-medium sm:inline">{user?.name || user?.username}</span>
+              <ChevronDown
+                size={16}
+                strokeWidth={2}
+                className={`transition-transform duration-150 ease-[cubic-bezier(0.2,0,0,1)] ${menuOpen ? "rotate-180" : ""}`}
+              />
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 mt-3 w-40 bg-white text-gray-700 rounded-lg shadow-lg overflow-hidden z-10">
+              <div className="absolute right-0 z-10 mt-3 w-44 overflow-hidden rounded-xl bg-white p-1 text-gray-700 shadow-[0_16px_40px_rgb(0_0_0/0.14)] ring-1 ring-black/10">
                 <button
                   onClick={() => {
                     setShowProfile(true);
                     setMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-50 text-left"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-[color,background-color,transform] duration-150 hover:bg-gray-50 active:scale-[0.96]"
                 >
-                  <User size={16} />
+                  <User size={16} strokeWidth={2} />
                   Profile
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-4 py-3 hover:bg-gray-50 text-left text-green-800 font-medium"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left font-medium text-[#b83825] transition-colors duration-150 hover:bg-[#fff5f2]"
                 >
-                  <LogOut size={16} />
+                  <LogOut size={16} strokeWidth={2} />
                   Logout
                 </button>
               </div>
@@ -88,23 +97,15 @@ export default function Navbar() {
       </header>
 
       {showProfile && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 relative">
-            <button
-              onClick={() => setShowProfile(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X size={20} />
-            </button>
-
+        <Modal onClose={() => setShowProfile(false)} maxWidth="max-w-sm">
             <div className="flex flex-col items-center text-center mb-5">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-3">
-                <User size={28} className="text-green-700" />
+              <div className="mb-3 flex size-16 items-center justify-center rounded-full bg-[#fbeae7]">
+                <User size={28} strokeWidth={2} className="text-[#cf432c]" />
               </div>
               <h3 className="text-lg font-bold text-gray-900">{user?.name}</h3>
               <span
-                className={`mt-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                  roleBadgeStyles[user?.role] || "bg-gray-100 text-gray-700"
+                className={`mt-1 rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${
+                  roleBadgeStyles[user?.role?.toLowerCase()] || "bg-gray-100 text-gray-700"
                 }`}
               >
                 {user?.role}
@@ -121,8 +122,7 @@ export default function Navbar() {
                 <span className="text-gray-800 font-medium">{user?.department || "—"}</span>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

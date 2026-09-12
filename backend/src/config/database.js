@@ -15,11 +15,13 @@ const {
   PGUSER,
   PGPASSWORD,
 } = process.env;
+const LOCAL_STORE_ONLY = process.env.LOCAL_STORE_ONLY === "true";
 
 // Initialize Supabase Client SDK if SUPABASE_URL and a key are provided
 let supabase = null;
 const supabaseKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 if (
+  !LOCAL_STORE_ONLY &&
   SUPABASE_URL &&
   SUPABASE_URL !== "https://your-project-ref.supabase.co" &&
   supabaseKey
@@ -30,13 +32,13 @@ if (
 
 // PostgreSQL / Supabase Connection Pool configuration
 let pgConfig = null;
-if (DATABASE_URL) {
+if (!LOCAL_STORE_ONLY && DATABASE_URL) {
   pgConfig = {
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 5000,
   };
-} else if (PGHOST) {
+} else if (!LOCAL_STORE_ONLY && PGHOST) {
   pgConfig = {
     host: PGHOST,
     port: parseInt(PGPORT || "5432"),
