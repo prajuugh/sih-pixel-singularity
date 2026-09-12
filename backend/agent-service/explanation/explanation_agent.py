@@ -154,6 +154,20 @@ class ExplanationAgent:
             raise ValueError("Explanation list items must be strings")
         return output
 
+    @staticmethod
+    def _parse_content(content) -> dict:
+        if not content or not isinstance(content, str):
+            raise ValueError("Response content is empty or not a string")
+        cleaned = content.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            cleaned = "\n".join(lines).strip()
+        return json.loads(cleaned)
+
     def explain(
         self,
         payload: dict,
@@ -183,7 +197,7 @@ class ExplanationAgent:
                 },
                 {"role": "user", "content": json.dumps(facts, separators=(",", ":"))},
             ],
-            "max_tokens": 600,
+            "max_tokens": 1500,
             "temperature": 0.2,
             "response_format": {
                 "type": "json_schema",
@@ -193,7 +207,6 @@ class ExplanationAgent:
                     "schema": EXPLANATION_SCHEMA,
                 },
             },
-            "provider": {"require_parameters": True},
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -212,8 +225,17 @@ class ExplanationAgent:
         try:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                 response_body = json.loads(response.read().decode("utf-8"))
-            content = response_body["choices"][0]["message"]["content"]
-            explanation = self._validate_output(json.loads(content))
+
+            choices = response_body.get("choices") or []
+            if not choices:
+                raise ValueError("No choices returned from model")
+
+            message = choices[0].get("message") or {}
+            content = message.get("content")
+            if not content and message.get("reasoning"):
+                content = message.get("reasoning")
+
+            explanation = self._validate_output(self._parse_content(content))
             explanation.update({
                 "mode": "OPENROUTER",
                 "provider": "OpenRouter",
@@ -223,5 +245,5 @@ class ExplanationAgent:
                 "groundedInArtifactIds": ["ranked-plan:v1", "verification-result:v1", "track-occupancy:v1"],
             })
             return explanation
-        except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
-            return self._fallback(facts, f"{type(exc).__name__}: model explanation unavailable")
+        except Exception as exc:
+            return self._fallback(facts, f"{type(exc).__name__}: {str(exc)[:120]}")
