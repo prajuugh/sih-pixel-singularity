@@ -33,6 +33,7 @@ async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
       requestId: req.request_id,
       planningDate: req.requested_date,
       trackId: req.track_id,
+      trackIds: req.track_ids || [req.track_id],
       durationMinutes: req.estimated_duration_minutes,
       startTime: req.preferred_start_time,
       endTime: req.preferred_end_time,

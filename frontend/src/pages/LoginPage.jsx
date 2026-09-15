@@ -32,7 +32,7 @@ export default function LoginPage() {
       <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-6xl overflow-hidden rounded-2xl border border-[#dfe3e1] bg-white sm:min-h-[calc(100vh-2.5rem)] lg:min-h-[calc(100vh-3.5rem)] lg:grid-cols-[1.08fr_0.92fr]">
         <section className="relative hidden flex-col justify-between overflow-hidden bg-[#171918] p-12 text-white lg:flex">
           <Link to="/" className="flex items-center gap-3 text-white no-underline">
-            <span className="grid size-10 place-items-center rounded-full bg-[#cf432c]">
+            <span className="grid size-10 place-items-center rounded-full bg-[#171918] border border-white/20">
               <Train size={21} strokeWidth={2} />
             </span>
             <span className="text-sm font-semibold">Railway Block Planning</span>
@@ -49,7 +49,7 @@ export default function LoginPage() {
         <section className="flex items-center justify-center px-5 py-10 sm:px-10 lg:px-14">
           <form onSubmit={handleLogin} className="w-full max-w-sm">
           <Link to="/" className="mb-12 flex items-center gap-3 text-[#171918] no-underline lg:hidden">
-            <span className="grid size-10 place-items-center rounded-full bg-[#cf432c] text-white">
+            <span className="grid size-10 place-items-center rounded-full bg-[#171918] text-white">
               <Train size={21} strokeWidth={2} />
             </span>
             <span className="text-sm font-semibold">Railway Block Planning</span>

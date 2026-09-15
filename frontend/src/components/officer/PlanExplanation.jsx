@@ -43,21 +43,7 @@ export default function PlanExplanation({ details, requestedWindow, recommendedB
       </div>
 
       <div className="px-4 py-4">
-        <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr]">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-              <Clock3 size={12} /> Requested
-            </div>
-            <p className="mt-1.5 font-mono text-base font-bold text-amber-950">{formatWindow(requestedWindow)}</p>
-            <p className="mt-1 flex items-center gap-1 text-[10px] text-amber-800">
-              <TrainFront size={11} /> {conflicts.length ? `${conflicts.length} timetable conflict${conflicts.length === 1 ? "" : "s"}` : "No timetable conflict"}
-            </p>
-          </div>
-
-          <div className="hidden items-center justify-center text-indigo-400 sm:flex">
-            <ArrowRight size={20} />
-          </div>
-
+        <div>
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
               <CheckCircle2 size={12} /> Recommended

@@ -32,7 +32,7 @@ export default function Navbar() {
     <>
       <header className="relative z-20 flex min-h-16 items-center justify-between gap-3 border-b border-[#e3e5e4] bg-white px-4 py-2.5 text-[#171918] sm:px-6 md:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#cf432c] text-white">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#171918] text-white">
             <Train size={19} strokeWidth={2} />
           </span>
           <div className="min-w-0">

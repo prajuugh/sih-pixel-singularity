@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar,
   Plus,
@@ -28,52 +28,250 @@ const roleBadgeStyles = {
   Admin: "bg-red-100 text-red-700",
   Officer: "bg-blue-100 text-blue-700",
   Teams: "bg-green-100 text-green-700",
+  Team: "bg-green-100 text-green-700",
 };
 
 export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All Departments");
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState(() => {
+    try {
+      const saved = localStorage.getItem("rbps_admin_users");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const seenUsernames = new Set();
+          const seenEmails = new Set();
+          const deduplicated = [];
+          for (const u of parsed) {
+            const uName = (u.username || "").trim().toLowerCase();
+            const uEmail = (u.email || "").trim().toLowerCase();
+            if (!seenUsernames.has(uName) && !seenEmails.has(uEmail)) {
+              if (uName) seenUsernames.add(uName);
+              if (uEmail) seenEmails.add(uEmail);
+              deduplicated.push(u);
+            }
+          }
+          return deduplicated;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load users from localStorage:", e);
+    }
+    return initialUsers;
+  });
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
+    role: "",
     department: "",
   });
   const [error, setError] = useState("");
 
+  // Edit user state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    role: "",
+    department: "",
+  });
+  const [editError, setEditError] = useState("");
+
+  // Delete user state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+
+  // Persist users
+  useEffect(() => {
+    try {
+      localStorage.setItem("rbps_admin_users", JSON.stringify(users));
+    } catch (e) {
+      console.warn("Could not persist users to localStorage:", e);
+    }
+  }, [users]);
+
   const filteredUsers = users.filter((u) => {
+    const term = search.toLowerCase();
     const matchesSearch =
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.department.toLowerCase().includes(search.toLowerCase());
+      u.email.toLowerCase().includes(term) ||
+      u.username.toLowerCase().includes(term) ||
+      (u.department || "").toLowerCase().includes(term) ||
+      (u.role || "").toLowerCase().includes(term);
     const matchesDept =
       deptFilter === "All Departments" || u.department === deptFilter;
     return matchesSearch && matchesDept;
   });
 
   const handleFormChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === "role" && value === "Officer") {
+        updated.department = "";
+      }
+      return updated;
+    });
   };
 
   const handleAddUser = (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password || !form.department) {
-      setError("All fields are required.");
+    if (!form.name || !form.email || !form.password || !form.role) {
+      setError("Name, email, password, and role are required.");
       return;
     }
+    if (form.role === "Team" && !form.department) {
+      setError("Please select a department for the team account.");
+      return;
+    }
+
+    const candidateUsername = (form.name.trim().toLowerCase().replace(/\s+/g, "_") || form.email.split("@")[0].toLowerCase()).trim();
+    const candidateRawName = form.name.trim().toLowerCase();
+    const candidateEmail = form.email.trim().toLowerCase();
+
+    // Duplication checks
+    const hasDuplicateName = users.some((u) => {
+      const uUsername = (u.username || "").trim().toLowerCase();
+      const uName = (u.name || "").trim().toLowerCase();
+      return uUsername === candidateUsername || uUsername === candidateRawName || (uName && uName === candidateRawName);
+    });
+
+    const hasDuplicateEmail = users.some((u) => {
+      const uEmail = (u.email || "").trim().toLowerCase();
+      return uEmail === candidateEmail;
+    });
+
+    if (hasDuplicateName && hasDuplicateEmail) {
+      setError(`A user with name "${form.name.trim()}" and email "${form.email.trim()}" already exists.`);
+      return;
+    }
+    if (hasDuplicateName) {
+      setError(`Username or name "${form.name.trim()}" is already taken. Please choose a different name.`);
+      return;
+    }
+    if (hasDuplicateEmail) {
+      setError(`Email address "${form.email.trim()}" is already registered. Please use a different email.`);
+      return;
+    }
+
     const newUser = {
-      id: users.length + 1,
-      username: form.email.split("@")[0],
-      email: form.email,
-      role: "Teams",
-      department: form.department,
+      id: users.length ? Math.max(...users.map((u) => u.id || 0)) + 1 : 1,
+      username: candidateUsername,
+      email: form.email.trim(),
+      password: form.password.trim(),
+      role: form.role === "Team" ? "Teams" : "Officer",
+      department: form.role === "Team" ? form.department : "—",
     };
     setUsers((prev) => [...prev, newUser]);
-    setForm({ name: "", email: "", password: "", department: "" });
+    setForm({ name: "", email: "", password: "", role: "", department: "" });
     setError("");
     setShowModal(false);
+  };
+
+  const handleStartEdit = (user) => {
+    setEditingUser(user);
+    setEditForm({
+      name: user.username || "",
+      email: user.email || "",
+      password: user.password || "",
+      role: user.role === "Teams" ? "Team" : (user.role || "Officer"),
+      department: user.department === "—" ? "" : (user.department || ""),
+    });
+    setEditError("");
+    setShowEditModal(true);
+  };
+
+  const handleEditFormChange = (field, value) => {
+    setEditForm((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === "role" && value !== "Team") {
+        updated.department = "";
+      }
+      return updated;
+    });
+  };
+
+  const handleUpdateUser = (e) => {
+    e.preventDefault();
+    if (!editForm.name || !editForm.email || !editForm.role) {
+      setEditError("Name, email, and role are required.");
+      return;
+    }
+    if (editForm.role === "Team" && !editForm.department) {
+      setEditError("Please select a department for the team account.");
+      return;
+    }
+
+    const candidateUsername = editForm.name.trim().toLowerCase();
+    const candidateEmail = editForm.email.trim().toLowerCase();
+
+    // Duplication checks against other users
+    const hasDuplicateName = users.some((u) => {
+      if (u.id === editingUser.id) return false;
+      const uUsername = (u.username || "").trim().toLowerCase();
+      const uName = (u.name || "").trim().toLowerCase();
+      return uUsername === candidateUsername || (uName && uName === candidateUsername);
+    });
+
+    const hasDuplicateEmail = users.some((u) => {
+      if (u.id === editingUser.id) return false;
+      const uEmail = (u.email || "").trim().toLowerCase();
+      return uEmail === candidateEmail;
+    });
+
+    if (hasDuplicateName && hasDuplicateEmail) {
+      setEditError(`A user with name "${editForm.name.trim()}" and email "${editForm.email.trim()}" already exists.`);
+      return;
+    }
+    if (hasDuplicateName) {
+      setEditError(`Username or name "${editForm.name.trim()}" is already taken by another user.`);
+      return;
+    }
+    if (hasDuplicateEmail) {
+      setEditError(`Email address "${editForm.email.trim()}" is already in use by another user.`);
+      return;
+    }
+
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === editingUser.id
+          ? {
+              ...u,
+              username: editForm.name.trim(),
+              email: editForm.email.trim(),
+              password: editForm.password?.trim() ? editForm.password.trim() : (u.password || "123456"),
+              role: editForm.role === "Team" ? "Teams" : editForm.role,
+              department: editForm.role === "Team" ? editForm.department : "—",
+            }
+          : u
+      )
+    );
+    setShowEditModal(false);
+    setEditingUser(null);
+  };
+
+  const handleStartDelete = (user) => {
+    if (user.username === "admin") {
+      setDeleteError("The primary administrator account cannot be deleted.");
+      setDeleteTarget(user);
+      setShowDeleteModal(true);
+      return;
+    }
+    setDeleteError("");
+    setDeleteTarget(user);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget || deleteTarget.username === "admin") return;
+    setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+    setDeleteError("");
   };
 
   return (
@@ -187,10 +385,20 @@ export default function AdminDashboard() {
                   </td>
                   <td className="py-3 text-gray-700">{u.department}</td>
                   <td className="py-3 text-right">
-                    <button aria-label={`Edit ${u.username}`} className="mr-1 inline-flex size-11 items-center justify-center rounded-lg text-[#cf432c] transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-[#8f2c1f] active:scale-[0.96]">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(u)}
+                      aria-label={`Edit ${u.username}`}
+                      className="mr-1 inline-flex size-11 items-center justify-center rounded-lg text-[#cf432c] transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-[#8f2c1f] active:scale-[0.96]"
+                    >
                       <Pencil size={16} strokeWidth={2} />
                     </button>
-                    <button aria-label={`Delete ${u.username}`} className="inline-flex size-11 items-center justify-center rounded-lg text-red-500 transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-red-700 active:scale-[0.96]">
+                    <button
+                      type="button"
+                      onClick={() => handleStartDelete(u)}
+                      aria-label={`Delete ${u.username}`}
+                      className="inline-flex size-11 items-center justify-center rounded-lg text-red-500 transition-[color,background-color,transform] duration-150 hover:bg-red-50 hover:text-red-700 active:scale-[0.96]"
+                    >
                       <Trash2 size={16} strokeWidth={2} />
                     </button>
                   </td>
@@ -229,7 +437,7 @@ export default function AdminDashboard() {
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
               placeholder="Enter full name"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
             />
 
             <label htmlFor="new-user-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -239,7 +447,7 @@ export default function AdminDashboard() {
               value={form.email}
               onChange={(e) => handleFormChange("email", e.target.value)}
               placeholder="Enter email address"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
             />
 
             <label htmlFor="new-user-password" className="block text-sm font-medium text-gray-700 mb-1">Initial Password</label>
@@ -249,22 +457,38 @@ export default function AdminDashboard() {
               value={form.password}
               onChange={(e) => handleFormChange("password", e.target.value)}
               placeholder="Set an initial password"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
             />
 
-            <label htmlFor="new-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+            <label htmlFor="new-user-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
             <select
-              id="new-user-department"
-              value={form.department}
-              onChange={(e) => handleFormChange("department", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#cf432c]"
+              id="new-user-role"
+              value={form.role}
+              onChange={(e) => handleFormChange("role", e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
             >
-              <option value="">Select department</option>
-              <option value="Engineering">Engineering</option>
-              <option value="Signal & Telecom">Signal & Telecom</option>
-              <option value="Traction">Traction</option>
-              <option value="Control">Control</option>
+              <option value="">Select role</option>
+              <option value="Team">Team</option>
+              <option value="Officer">Officer</option>
             </select>
+
+            {form.role === "Team" && (
+              <>
+                <label htmlFor="new-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <select
+                  id="new-user-department"
+                  value={form.department}
+                  onChange={(e) => handleFormChange("department", e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+                >
+                  <option value="">Select department</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="Signal & Telecom">Signal & Telecom</option>
+                  <option value="Traction">Traction</option>
+                  <option value="Control">Control</option>
+                </select>
+              </>
+            )}
 
             {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
@@ -285,6 +509,146 @@ export default function AdminDashboard() {
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && editingUser && (
+        <Modal onClose={() => { setShowEditModal(false); setEditingUser(null); }}>
+          <form onSubmit={handleUpdateUser}>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Edit User</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Update details for user <strong className="text-gray-900">{editingUser.username}</strong>.
+            </p>
+
+            <label htmlFor="edit-user-name" className="block text-sm font-medium text-gray-700 mb-1">Username / Name</label>
+            <input
+              type="text"
+              id="edit-user-name"
+              value={editForm.name}
+              onChange={(e) => handleEditFormChange("name", e.target.value)}
+              placeholder="Enter username or name"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+            />
+
+            <label htmlFor="edit-user-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              id="edit-user-email"
+              value={editForm.email}
+              onChange={(e) => handleEditFormChange("email", e.target.value)}
+              placeholder="Enter email address"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+            />
+
+            <label htmlFor="edit-user-password" className="block text-sm font-medium text-gray-700 mb-1">New Password (leave blank to keep current)</label>
+            <input
+              type="text"
+              id="edit-user-password"
+              value={editForm.password}
+              onChange={(e) => handleEditFormChange("password", e.target.value)}
+              placeholder="Enter new password"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+            />
+
+            <label htmlFor="edit-user-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <select
+              id="edit-user-role"
+              value={editForm.role}
+              onChange={(e) => handleEditFormChange("role", e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+            >
+              <option value="">Select role</option>
+              <option value="Team">Team</option>
+              <option value="Officer">Officer</option>
+              {editingUser.role === "Admin" && <option value="Admin">Admin</option>}
+            </select>
+
+            {editForm.role === "Team" && (
+              <>
+                <label htmlFor="edit-user-department" className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <select
+                  id="edit-user-department"
+                  value={editForm.department}
+                  onChange={(e) => handleEditFormChange("department", e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+                >
+                  <option value="">Select department</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="Signal & Telecom">Signal & Telecom</option>
+                  <option value="Traction">Traction</option>
+                  <option value="Control">Control</option>
+                </select>
+              </>
+            )}
+
+            {editError && <p className="text-red-600 text-sm mb-3">{editError}</p>}
+
+            <div className="flex justify-end gap-3 mt-5">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { setShowEditModal(false); setEditingUser(null); }}
+                className="px-4 py-2 text-sm hover:bg-gray-100"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="px-4 py-2 text-sm"
+              >
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete User Modal */}
+      {showDeleteModal && deleteTarget && (
+        <Modal onClose={() => { setShowDeleteModal(false); setDeleteTarget(null); setDeleteError(""); }}>
+          <div className="p-1">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="rounded-full bg-red-100 p-2.5 text-red-600">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete User</h3>
+                <p className="text-xs text-gray-500">Confirm user account removal</p>
+              </div>
+            </div>
+
+            {deleteError ? (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-5 text-sm text-red-800">
+                {deleteError}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600 mb-5">
+                Are you sure you want to delete user{" "}
+                <strong className="text-gray-900">{deleteTarget.username}</strong> ({deleteTarget.email})? This action cannot be undone.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { setShowDeleteModal(false); setDeleteTarget(null); setDeleteError(""); }}
+                className="px-4 py-2 text-sm hover:bg-gray-100"
+              >
+                {deleteError ? "Close" : "Cancel"}
+              </Button>
+              {!deleteError && (
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 active:scale-[0.98] transition-[background-color,transform] duration-150"
+                >
+                  Delete User
+                </button>
+              )}
+            </div>
+          </div>
         </Modal>
       )}
     </div>

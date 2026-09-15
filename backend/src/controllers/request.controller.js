@@ -105,7 +105,7 @@ async function postReviewRequest(req, res, next) {
   try {
     const { requestId } = req.params;
     const officerId = req.user ? req.user.id : 2;
-    const { decision, feedback, alternative_id, prohibited_window, prohibitedStartTime, prohibitedEndTime } = req.body;
+    const { decision, feedback, alternative_id, prohibited_window, prohibitedStartTime, prohibitedEndTime, new_window, newWindow } = req.body;
 
     if (!decision || !["APPROVED", "REJECTED", "REVISION_REQUIRED"].includes(decision.toUpperCase())) {
       return res.status(400).json({
@@ -119,7 +119,9 @@ async function postReviewRequest(req, res, next) {
       endTime: prohibitedEndTime,
     } : null);
 
-    const result = await reviewRequest(requestId, officerId, decision.toUpperCase(), feedback, alternative_id, prohibitedWindow);
+    const targetNewWindow = new_window || newWindow || null;
+
+    const result = await reviewRequest(requestId, officerId, decision.toUpperCase(), feedback, alternative_id, prohibitedWindow, targetNewWindow);
 
     res.json({
       success: true,

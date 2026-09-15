@@ -37,6 +37,7 @@ class PlanRequest(BaseModel):
     requestId: Optional[str] = None
     taskId: Optional[str] = None
     trackId: Optional[str] = "KA-T-000342"
+    trackIds: Optional[list[str]] = None
     department: Optional[str] = "ENGINEERING"
     assetType: Optional[str] = "TRACK"
     planningDate: Optional[str] = "2026-09-15"

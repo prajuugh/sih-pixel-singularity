@@ -78,6 +78,17 @@ class PlanningPipelineTests(unittest.TestCase):
         self.assertNotIn("KA-T-000550", route["trackIds"])
         self.assertGreater(len(route["coordinates"]), 2)
 
+    def test_reroute_hubballi_bypass_routes_via_mainline_station(self):
+        route = self.agent.traffic_agent.find_available_reroute(
+            "KA-T-002759",
+            blocked_track_ids=["KA-T-002759", "KA-T-004283", "KA-T-004962", "KA-T-004960"]
+        )
+        self.assertIsNotNone(route)
+        self.assertIn("KA-T-000265", route["trackIds"])  # Ashok Nagar Bridge in Hubballi
+        self.assertNotIn("KA-T-002759", route["trackIds"])
+        self.assertNotIn("KA-T-004283", route["trackIds"])
+        self.assertLess(min(c[1] for c in route["coordinates"]), 15.35)  # Enters Hubballi city (below route)
+
     def test_blackout_replanning_checks_traffic_before_recommending(self):
         result = self.agent.process_plan({
             "requestId": "TEST-2",

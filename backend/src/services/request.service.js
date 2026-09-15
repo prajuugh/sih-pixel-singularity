@@ -18,9 +18,11 @@ async function enrichRequestWithAgentPlan(req) {
 
   try {
     const primaryTrackId = req.track_id || (Array.isArray(req.track_ids) && req.track_ids[0]) || "KA-T-000342";
+    const reqTrackIds = Array.isArray(req.track_ids) && req.track_ids.length > 0 ? req.track_ids : [primaryTrackId];
     const agentPlan = await callPythonAgentService("/agent/plan", {
       requestId: req.request_id,
       trackId: primaryTrackId,
+      trackIds: reqTrackIds,
       department: req.department,
       assetType: req.asset_type || "TRACK",
       planningDate: req.requested_date || req.from_date || "2026-09-15",
@@ -117,6 +119,7 @@ async function createRequest(userId, payload) {
     agentPlan = await callPythonAgentService("/agent/plan", {
       requestId,
       trackId: primaryTrackId,
+      trackIds,
       department: dept,
       assetType: (payload.assetType || payload.asset_type || "TRACK").toUpperCase(),
       planningDate: fromDate,
@@ -197,7 +200,7 @@ async function createRequest(userId, payload) {
   return newRequest;
 }
 
-async function reviewRequest(requestId, officerId, decision, feedback, alternativeId = null, prohibitedWindow = null) {
+async function reviewRequest(requestId, officerId, decision, feedback, alternativeId = null, prohibitedWindow = null, newWindow = null) {
   const req = fallbackStore.maintenance_requests.find((r) => r.request_id === requestId);
   if (!req) {
     throw { statusCode: 404, code: "REQUEST_NOT_FOUND", message: `Request ${requestId} not found` };
@@ -229,24 +232,92 @@ async function reviewRequest(requestId, officerId, decision, feedback, alternati
   req.reviewed_at = new Date().toISOString();
   req.updated_at = new Date().toISOString();
 
-  // If officer marked prohibited times, revise the entire block plan via Multi-Agent Service
-  if (prohibitedWindow && prohibitedWindow.startTime && prohibitedWindow.endTime) {
-    req.prohibited_window = prohibitedWindow;
-    req.prohibited_start_time = prohibitedWindow.startTime;
-    req.prohibited_end_time = prohibitedWindow.endTime;
+  // If officer specified a direct new window (e.g. 21:00 to 23:00)
+  if (newWindow && newWindow.startTime && newWindow.endTime) {
+    try {
+      const revisedPlan = await callPythonAgentService("/agent/plan", {
+        requestId: req.request_id,
+        trackId: req.track_id,
+        trackIds: req.track_ids || (req.track_id ? [req.track_id] : ["KA-T-000342"]),
+        department: req.department,
+        assetType: req.asset_type || "TRACK",
+        planningDate: newWindow.date || req.requested_date || req.from_date,
+        startTime: newWindow.startTime,
+        endTime: newWindow.endTime,
+        durationMinutes: req.estimated_duration_minutes || 90,
+      });
+      recordAgentRun(revisedPlan, req.request_id);
+
+      if (revisedPlan) {
+        req.agent_plan = revisedPlan;
+        req.priority_score = revisedPlan.priorityScore;
+        req.conflict = revisedPlan.conflict;
+        req.conflicting_trains = revisedPlan.conflictingTrains || [];
+        req.recommended_block = revisedPlan.recommendedBlock || {
+          date: newWindow.date || req.requested_date || req.from_date,
+          startTime: newWindow.startTime,
+          endTime: newWindow.endTime,
+          trackId: req.track_id,
+          priorityScore: revisedPlan.priorityScore || 70,
+          isRevised: true,
+        };
+        req.ai_explanation = revisedPlan.explanation || `Possession rescheduled to ${newWindow.startTime}–${newWindow.endTime}.`;
+        req.alternatives = revisedPlan.alternatives || [];
+
+        if (req.recommended_block) {
+          req.scheduled_start_time = req.recommended_block.startTime;
+          req.scheduled_end_time = req.recommended_block.endTime;
+          req.scheduled_date = req.recommended_block.date;
+        }
+
+        req.prohibited_window = null;
+        req.prohibited_start_time = null;
+        req.prohibited_end_time = null;
+
+        fallbackStore.planning_alternatives = fallbackStore.planning_alternatives.filter(
+          (a) => a.request_id !== requestId
+        );
+        if (Array.isArray(revisedPlan.alternatives)) {
+          for (const alt of revisedPlan.alternatives) {
+            fallbackStore.planning_alternatives.push({
+              id: fallbackStore.planning_alternatives.length + 1,
+              request_id: requestId,
+              alternative_type: alt.type,
+              description: alt.description,
+              feasible: alt.feasible !== undefined ? alt.feasible : true,
+              train_impact: alt.trainImpact || "",
+              delay_minutes: alt.delayMinutes || 0,
+              priority_score: alt.priorityScore || 70,
+              rank: alt.rank || 1,
+              created_at: new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Error re-running block planner for new window:", err.message);
+    }
+  } else if (prohibitedWindow && prohibitedWindow.startTime && prohibitedWindow.endTime) {
+    let pStart = prohibitedWindow.startTime;
+    let pEnd = prohibitedWindow.endTime;
+    const safeProhibitedWindow = { ...prohibitedWindow, startTime: pStart, endTime: pEnd };
+    req.prohibited_window = safeProhibitedWindow;
+    req.prohibited_start_time = safeProhibitedWindow.startTime;
+    req.prohibited_end_time = safeProhibitedWindow.endTime;
 
     try {
       const revisedPlan = await callPythonAgentService("/agent/plan", {
         requestId: req.request_id,
         trackId: req.track_id,
+        trackIds: req.track_ids || (req.track_id ? [req.track_id] : ["KA-T-000342"]),
         department: req.department,
         assetType: req.asset_type,
         planningDate: req.requested_date || req.from_date,
         startTime: req.preferred_start_time,
         endTime: req.preferred_end_time,
         durationMinutes: req.estimated_duration_minutes || 90,
-        prohibitedStartTime: prohibitedWindow.startTime,
-        prohibitedEndTime: prohibitedWindow.endTime,
+        prohibitedStartTime: safeProhibitedWindow.startTime,
+        prohibitedEndTime: safeProhibitedWindow.endTime,
       });
       recordAgentRun(revisedPlan, req.request_id);
 

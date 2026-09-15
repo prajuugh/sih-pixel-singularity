@@ -13,8 +13,11 @@ function computeRevisedPreview(start, end, duration = 90) {
   if (!start || !end) return null;
   const toMinutes = (value) => { const [h, m] = value.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
   const toTime = (minutes) => { const value = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`; };
+  let startMinutes = toMinutes(start);
   let endMinutes = toMinutes(end);
-  if (endMinutes <= toMinutes(start)) endMinutes += 1440;
+  if (endMinutes <= startMinutes) {
+    endMinutes += 1440;
+  }
   return { startTime: toTime(endMinutes + 15), endTime: toTime(endMinutes + 15 + duration) };
 }
 
@@ -27,16 +30,25 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
   const [feedback, setFeedback] = useState("");
   const [formError, setFormError] = useState("");
 
+  const formatOptionType = (type, rank = 1) => {
+    if (type === "RESCHEDULE") {
+      return rank === 1 ? "SCHEDULE (Recommended)" : `SCHEDULE (Alternative ${rank})`;
+    }
+    return type;
+  };
+
   const initialProhibited = request.raw?.prohibited_window || request.prohibitedWindow;
   const requestedStart = request.raw?.preferred_start_time || "19:00";
   const requestedEnd = request.raw?.preferred_end_time || "21:00";
+  const recommendedBlock = request.recommendedBlock || request.agentPlan?.recommendedBlock;
+  const duration = Number(request.raw?.estimated_duration_minutes || 120);
+
   const [prohibitedStartTime, setProhibitedStartTime] = useState(initialProhibited?.startTime || requestedStart);
   const [prohibitedEndTime, setProhibitedEndTime] = useState(initialProhibited?.endTime || requestedEnd);
   const isV2Plan = request.agentPlan?.schemaVersion === "2.0";
   const priorityScore = request.priorityScore ?? request.agentPlan?.priorityScore ?? (isV2Plan ? null : 75);
   const breakdown = request.agentPlan?.breakdown || {};
   const prohibitedWindow = request.raw?.prohibited_window || request.prohibitedWindow;
-  const recommendedBlock = request.recommendedBlock || request.agentPlan?.recommendedBlock;
   const isVerifiedPlan = !isV2Plan || request.agentPlan?.verification?.passed === true;
   const isRevised = Boolean(prohibitedWindow || recommendedBlock?.isRevised || ["Revised Plan", "AI Processing", "REVISION_REQUIRED"].includes(request.status));
   const hasConflict = request.agentPlan?.verification?.passed === false || (!isRevised && Boolean(request.conflict || request.conflictingTrains?.length));
@@ -55,7 +67,6 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
   const selectedAlternative = alternatives.find((option) => option.id === selectedAltId || option.type === selectedAltId);
   const trackIds = request.raw?.track_ids?.length ? request.raw.track_ids : [request.raw?.track_id || request.agentPlan?.trackId].filter(Boolean);
-  const duration = Number(request.raw?.estimated_duration_minutes || 120);
   const revisedPreview = computeRevisedPreview(prohibitedStartTime, prohibitedEndTime, duration);
   const scoreTone = priorityScore == null ? "text-slate-500" : priorityScore >= 80 ? "text-rose-700" : priorityScore >= 65 ? "text-amber-700" : "text-emerald-700";
   const state = !isVerifiedPlan
@@ -74,7 +85,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
     if (type === "APPROVED") {
       const selected = option || alternatives[0] || null;
       setSelectedAltId(selected?.id || selected?.type || null);
-      setFeedback(selected ? `Approved under ${selected.type}: ${selected.description}` : "");
+      setFeedback(selected ? `Approved under ${formatOptionType(selected.type, selected.rank || 1)}: ${selected.description}` : "");
     } else if (type === "REVISION_REQUIRED") {
       setSelectedAltId(null);
       setProhibitedStartTime(requestedStart);
@@ -89,7 +100,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
   const selectAlternative = (option) => {
     setSelectedAltId(option.id || option.type);
-    setFeedback(`Approved under ${option.type}: ${option.description}`);
+    setFeedback(`Approved under ${formatOptionType(option.type, option.rank || 1)}: ${option.description}`);
     setFormError("");
   };
 
@@ -98,9 +109,16 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
     if (decisionType === "APPROVED" && !isVerifiedPlan) return setFormError("This plan failed verification and cannot be approved.");
     if (decisionType === "APPROVED" && !selectedAltId) return setFormError("Select one operational option before approving.");
     if (!feedback.trim()) return setFormError("Add a short reason or instruction for this decision.");
-    if (decisionType === "APPROVED") onApprove?.(request, feedback, selectedAltId);
-    else if (decisionType === "REVISION_REQUIRED") onRevision?.(request, feedback, null, { startTime: prohibitedStartTime, endTime: prohibitedEndTime, reason: feedback });
-    else onDecline?.(request, feedback);
+
+    if (decisionType === "APPROVED") {
+      onApprove?.(request, feedback, selectedAltId);
+    } else if (decisionType === "REVISION_REQUIRED") {
+      if (!prohibitedStartTime || !prohibitedEndTime) return setFormError("From and Until times are required.");
+      if (prohibitedStartTime === prohibitedEndTime) return setFormError("Prohibited start and end cannot be identical.");
+      onRevision?.(request, feedback, null, { startTime: prohibitedStartTime, endTime: prohibitedEndTime, reason: feedback });
+    } else {
+      onDecline?.(request, feedback);
+    }
     setShowReviewModal(false);
   };
 
@@ -119,7 +137,12 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
         </div>
 
         <div className={`mt-4 flex items-start gap-3 rounded-lg border p-3.5 ${state.box} ${state.text}`}><StateIcon size={20} className="mt-0.5 shrink-0" aria-hidden="true" /><div><p className="font-semibold">{state.label}</p><p className="mt-0.5 text-sm leading-5 opacity-80">{state.detail}</p></div></div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch"><div className="rounded-lg border border-[#e1e6e8] bg-[#f8fafb] p-3.5"><p className="text-sm font-medium text-[#657680]">Requested window</p><p className="mt-1 font-mono text-lg font-semibold text-[#243743]">{windowText(requestedStart, requestedEnd)}</p></div><div className="hidden items-center text-[#8aa0ad] sm:flex" aria-hidden="true">→</div><div className="rounded-lg border border-[#cce2d5] bg-[#f2faf5] p-3.5"><p className="text-sm font-medium text-emerald-800">Recommended window</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-950">{windowText(recommendedBlock?.startTime, recommendedBlock?.endTime)}</p></div></div>
+        <div className="mt-4">
+          <div className="rounded-lg border border-[#cce2d5] bg-[#f2faf5] p-3.5">
+            <p className="text-sm font-medium text-emerald-800">Recommended window</p>
+            <p className="mt-1 font-mono text-lg font-semibold text-emerald-950">{windowText(recommendedBlock?.startTime, recommendedBlock?.endTime)}</p>
+          </div>
+        </div>
 
         <div className="mt-4 flex flex-col-reverse gap-2 border-t border-[#edf0f1] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" onClick={() => setShowDetails((open) => !open)} aria-expanded={showDetails} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] ${focusRing}`}>{showDetails ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}{showDetails ? "Hide evidence" : "View evidence and agent explanation"}</button>
@@ -135,7 +158,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
               {alternatives.map((option, index) => (
                 <div key={option.id || option.type || index} className="rounded-lg border border-[#dce4e7] bg-white p-2 hover:border-[#8eabbc]">
                   <button type="button" onClick={() => openReview("APPROVED", option)} disabled={!isVerifiedPlan} className={`flex min-h-11 w-full flex-col gap-2 rounded-md p-2 text-left hover:bg-[#f7fafb] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-row sm:items-center sm:justify-between ${focusRing}`}>
-                    <span className="flex min-w-0 items-start gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e7f0f4] text-xs font-bold text-[#315b75]">{option.rank || index + 1}</span><span><span className="block text-sm font-semibold text-[#203746]">{option.type}</span><span className="mt-0.5 block text-sm leading-5 text-[#5f707b]">{option.description}</span></span></span>
+                    <span className="flex min-w-0 items-start gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e7f0f4] text-xs font-bold text-[#315b75]">{option.rank || index + 1}</span><span><span className="block text-sm font-semibold text-[#203746]">{formatOptionType(option.type, option.rank || index + 1)}</span><span className="mt-0.5 block text-sm leading-5 text-[#5f707b]">{option.description}</span></span></span>
                     <span className="shrink-0 text-sm font-medium text-[#536a77]">{option.trainImpact || (option.delayMinutes === 0 ? "No delay" : `+${option.delayMinutes || 0} min`)}</span>
                   </button>
                   {option.type === "REROUTE" && option.routeGeometry?.coordinates?.length > 1 && trackIds[0] && (
@@ -161,11 +184,56 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
       {showReviewModal && <Modal title={decisionType === "APPROVED" ? "Approve a plan" : decisionType === "REVISION_REQUIRED" ? "Request a modified plan" : "Decline request"} onClose={() => setShowReviewModal(false)} maxWidth="max-w-xl">
         <form onSubmit={submitReview} className="max-h-[75vh] overflow-y-auto pr-1 text-base"><p className="mb-5 text-sm leading-5 text-[#61727d]">Case <span className="font-mono font-semibold text-[#263a47]">{request.id}</span>. Review the information below before confirming.</p>
-          {decisionType === "APPROVED" && <fieldset><legend className="font-semibold text-[#172630]">Operational option</legend><p className="mt-1 text-sm text-[#657680]">Choose one option. This selection becomes part of the decision record.</p><div className="mt-3 space-y-2">{alternatives.map((option, index) => { const id = option.id || option.type; const selected = selectedAltId === id; return <label key={id || index} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${selected ? "border-[#315b75] bg-[#eef5f8]" : "border-[#dce4e7] hover:bg-[#f8fafb]"}`}><input type="radio" name={`alternative-${request.id}`} value={id} checked={selected} onChange={() => selectAlternative(option)} className="mt-1 size-4 accent-[#315b75]" /><span><span className="block text-sm font-semibold text-[#203746]">{option.type}</span><span className="mt-0.5 block text-sm leading-5 text-[#5f707b]">{option.description}</span></span></label>; })}</div></fieldset>}
-          {decisionType === "REVISION_REQUIRED" && <fieldset className="rounded-xl border border-amber-200 bg-amber-50 p-4"><legend className="px-1 font-semibold text-amber-950">Prohibited period</legend><p className="text-sm leading-5 text-amber-900">The planner will search for a verified possession window outside these hours.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-[#3c4d58]">From<input type="time" value={prohibitedStartTime} onChange={(event) => { setProhibitedStartTime(event.target.value); setFeedback(`Do not schedule possession between ${event.target.value} and ${prohibitedEndTime}. Generate a new verified plan outside this period.`); }} className={`mt-1 min-h-11 w-full rounded-lg border border-[#bfcbd1] bg-white px-3 font-mono text-base ${focusRing}`} required /></label><label className="text-sm font-medium text-[#3c4d58]">Until<input type="time" value={prohibitedEndTime} onChange={(event) => { setProhibitedEndTime(event.target.value); setFeedback(`Do not schedule possession between ${prohibitedStartTime} and ${event.target.value}. Generate a new verified plan outside this period.`); }} className={`mt-1 min-h-11 w-full rounded-lg border border-[#bfcbd1] bg-white px-3 font-mono text-base ${focusRing}`} required /></label></div>{revisedPreview && <div className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-white p-3 text-sm text-emerald-900"><Sparkles size={17} className="mt-0.5 shrink-0" aria-hidden="true" /><span><strong>Earliest search point:</strong> {windowText(revisedPreview.startTime, revisedPreview.endTime)}. The agent will verify constraints after submission.</span></div>}</fieldset>}
+          {decisionType === "APPROVED" && <fieldset><legend className="font-semibold text-[#172630]">Operational option</legend><p className="mt-1 text-sm text-[#657680]">Choose one option. This selection becomes part of the decision record.</p><div className="mt-3 space-y-2">{alternatives.map((option, index) => { const id = option.id || option.type; const selected = selectedAltId === id; return <label key={id || index} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${selected ? "border-[#315b75] bg-[#eef5f8]" : "border-[#dce4e7] hover:bg-[#f8fafb]"}`}><input type="radio" name={`alternative-${request.id}`} value={id} checked={selected} onChange={() => selectAlternative(option)} className="mt-1 size-4 accent-[#315b75]" /><span><span className="block text-sm font-semibold text-[#203746]">{formatOptionType(option.type, option.rank || index + 1)}</span><span className="mt-0.5 block text-sm leading-5 text-[#5f707b]">{option.description}</span></span></label>; })}</div></fieldset>}
+          {decisionType === "REVISION_REQUIRED" && (
+            <fieldset className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <legend className="px-1 font-semibold text-amber-950">Prohibited blackout period</legend>
+              <p className="text-sm leading-5 text-amber-900">
+                The planner will search for a verified possession window outside these hours.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-sm font-medium text-[#3c4d58]">
+                  From
+                  <input
+                    type="time"
+                    value={prohibitedStartTime}
+                    onChange={(event) => {
+                      setProhibitedStartTime(event.target.value);
+                      setFeedback(`Do not schedule possession between ${event.target.value} and ${prohibitedEndTime}. Generate a new verified plan outside this period.`);
+                      setFormError("");
+                    }}
+                    className={`mt-1 min-h-11 w-full rounded-lg border border-[#bfcbd1] bg-white px-3 font-mono text-base ${focusRing}`}
+                    required
+                  />
+                </label>
+                <label className="text-sm font-medium text-[#3c4d58]">
+                  Until
+                  <input
+                    type="time"
+                    value={prohibitedEndTime}
+                    onChange={(event) => {
+                      setProhibitedEndTime(event.target.value);
+                      setFeedback(`Do not schedule possession between ${prohibitedStartTime} and ${event.target.value}. Generate a new verified plan outside this period.`);
+                      setFormError("");
+                    }}
+                    className={`mt-1 min-h-11 w-full rounded-lg border border-[#bfcbd1] bg-white px-3 font-mono text-base ${focusRing}`}
+                    required
+                  />
+                </label>
+              </div>
+              {revisedPreview && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-white p-3 text-sm text-emerald-900">
+                  <Sparkles size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    <strong>Earliest search point:</strong> {windowText(revisedPreview.startTime, revisedPreview.endTime)}. The agent will verify constraints after submission.
+                  </span>
+                </div>
+              )}
+            </fieldset>
+          )}
           {decisionType === "REJECTED" && <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900"><Ban size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>This closes the request. Give the requesting team a clear reason below.</span></div>}
           <label htmlFor={`${request.id}-feedback`} className="mt-5 block text-sm font-semibold text-[#263a47]">Reason or instructions</label><textarea id={`${request.id}-feedback`} rows={4} value={feedback} onChange={(event) => { setFeedback(event.target.value); setFormError(""); }} placeholder={decisionType === "REJECTED" ? "Explain why this request cannot proceed…" : "Add instructions for the maintenance and control teams…"} className={`mt-1 w-full rounded-lg border border-[#bfcbd1] p-3 text-base leading-6 ${focusRing}`} aria-describedby={formError ? `${request.id}-form-error` : undefined} required />{formError && <p id={`${request.id}-form-error`} role="alert" className="mt-2 flex items-center gap-2 text-sm font-medium text-red-700"><AlertTriangle size={16} aria-hidden="true" />{formError}</p>}
-          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowReviewModal(false)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-[#526570] hover:bg-[#f0f4f5] ${focusRing}`}>Cancel</button><button type="submit" disabled={decisionType === "APPROVED" && (!selectedAltId || !isVerifiedPlan)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white ${focusRing} ${decisionType === "REVISION_REQUIRED" ? "bg-amber-700 hover:bg-amber-800" : decisionType === "REJECTED" ? "bg-red-700 hover:bg-red-800" : selectedAltId && isVerifiedPlan ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}>{decisionType === "APPROVED" ? <CheckCircle2 size={17} aria-hidden="true" /> : decisionType === "REVISION_REQUIRED" ? <Route size={17} aria-hidden="true" /> : <Ban size={17} aria-hidden="true" />}{decisionType === "APPROVED" ? `Approve ${selectedAlternative?.type || "selected option"}` : decisionType === "REVISION_REQUIRED" ? "Generate revised plan" : "Confirm decline"}</button></div>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowReviewModal(false)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-[#526570] hover:bg-[#f0f4f5] ${focusRing}`}>Cancel</button><button type="submit" disabled={decisionType === "APPROVED" && (!selectedAltId || !isVerifiedPlan)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white ${focusRing} ${decisionType === "REVISION_REQUIRED" ? "bg-amber-700 hover:bg-amber-800" : decisionType === "REJECTED" ? "bg-red-700 hover:bg-red-800" : selectedAltId && isVerifiedPlan ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}>{decisionType === "APPROVED" ? <CheckCircle2 size={17} aria-hidden="true" /> : decisionType === "REVISION_REQUIRED" ? <Route size={17} aria-hidden="true" /> : <Ban size={17} aria-hidden="true" />}{decisionType === "APPROVED" ? `Approve ${formatOptionType(selectedAlternative?.type, selectedAlternative?.rank || 1) || "selected option"}` : decisionType === "REVISION_REQUIRED" ? "Generate revised plan" : "Confirm decline"}</button></div>
         </form>
       </Modal>}
     </article>

@@ -77,6 +77,7 @@ class OrchestratorAgent:
         trace = []
         warnings = []
         track_id = payload.get("trackId") or "KA-T-000342"
+        track_ids = payload.get("trackIds") or ([track_id] if track_id else [])
         date = payload.get("planningDate") or "2026-09-15"
         start_time = payload.get("startTime") or "19:00"
         end_time = payload.get("endTime") or "20:30"
@@ -103,7 +104,7 @@ class OrchestratorAgent:
             ["planning-request:v1"],
             ["track-occupancy:v1"],
             [{"sourceType": "TIMETABLE", "sourceId": f"schedule:{track_id}:{date}", "observedAt": observed_at}],
-            lambda: self.traffic_agent.analyze_traffic(track_id, start_time, end_time),
+            lambda: self.traffic_agent.analyze_traffic(track_id, start_time, end_time, blocked_track_ids=track_ids),
             lambda result: (
                 f"{len(result['conflicts'])} conflicting movement(s) found in the requested window."
                 if result["hasConflict"] else "No timetable overlap found in the requested window."

@@ -56,10 +56,10 @@ export default function OfficerRequests() {
     };
   }, []);
 
-  const handleDecision = async (request, decisionType, feedback, alternativeId = null, prohibitedWindow = null) => {
+  const handleDecision = async (request, decisionType, feedback, alternativeId = null, prohibitedWindow = null, newWindow = null) => {
     const statusMap = { APPROVED: "Approved", REVISION_REQUIRED: "AI Processing", REJECTED: "Declined" };
     const newStatus = statusMap[decisionType] || decisionType;
-    const result = await updateRequestStatus(request.id, newStatus, decisionType, feedback, alternativeId, prohibitedWindow);
+    const result = await updateRequestStatus(request.id, newStatus, decisionType, feedback, alternativeId, prohibitedWindow, newWindow);
 
     if (result?.data?.request) {
       const updated = result.data.request;
@@ -154,7 +154,7 @@ export default function OfficerRequests() {
                 <div className="rounded-xl border border-[#d9e1e5] bg-white px-6 py-10 text-center"><h3 className="text-base font-semibold text-[#172630]">No requests match this filter</h3><button type="button" onClick={() => setQueueFilter("ALL")} className="mt-3 min-h-11 rounded-lg px-4 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75]">Show all requests</button></div>
               ) : (
                 <div className="space-y-4">
-                  {visibleRequests.map((request) => <RequestCard key={request.id} request={request} onApprove={(item, feedback, alternativeId) => handleDecision(item, "APPROVED", feedback, alternativeId)} onRevision={(item, feedback, alternativeId, window) => handleDecision(item, "REVISION_REQUIRED", feedback, alternativeId, window)} onDecline={(item, feedback) => handleDecision(item, "REJECTED", feedback)} />)}
+                  {visibleRequests.map((request) => <RequestCard key={request.id} request={request} onApprove={(item, feedback, alternativeId) => handleDecision(item, "APPROVED", feedback, alternativeId)} onRevision={(item, feedback, alternativeId, prohibitedWindow, newWindow) => handleDecision(item, "REVISION_REQUIRED", feedback, alternativeId, prohibitedWindow, newWindow)} onDecline={(item, feedback) => handleDecision(item, "REJECTED", feedback)} />)}
                 </div>
               )}
             </section>

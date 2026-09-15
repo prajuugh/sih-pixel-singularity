@@ -25,16 +25,63 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   const login = (username, password) => {
-    const found = mockUsers.find(
-      (u) => u.username === username && u.password === password
-    );
-    if (found) {
-      // This app currently uses local mock users. A JWT left behind by an older
-      // backend login would take precedence over this user's role at the API.
-      localStorage.removeItem("rbps_token");
-      setUser(found);
-      return { success: true, role: found.role };
+    const cleanIdent = (username || "").trim().toLowerCase();
+    const cleanPassword = (password || "").trim();
+
+    const normalizeRole = (role) => {
+      const r = (role || "").toLowerCase();
+      if (r === "officer") return "officer";
+      if (r === "team" || r === "teams") return "teams";
+      if (r === "admin") return "admin";
+      return r;
+    };
+
+    // 1. Check custom users saved from Admin Dashboard
+    let adminUsers = [];
+    try {
+      const stored = localStorage.getItem("rbps_admin_users");
+      if (stored) adminUsers = JSON.parse(stored);
+    } catch (e) {
+      console.warn("Could not read rbps_admin_users:", e);
     }
+
+    const foundAdmin = adminUsers.find((u) => {
+      const uname = (u.username || "").trim().toLowerCase();
+      const uemail = (u.email || "").trim().toLowerCase();
+      const unameDisplay = (u.name || "").trim().toLowerCase();
+      const matchIdent = uname === cleanIdent || uemail === cleanIdent || unameDisplay === cleanIdent;
+      const expectedPass = (u.password || "123456").trim();
+      return matchIdent && expectedPass === cleanPassword;
+    });
+
+    if (foundAdmin) {
+      localStorage.removeItem("rbps_token");
+      const normalizedUser = {
+        ...foundAdmin,
+        role: normalizeRole(foundAdmin.role),
+      };
+      setUser(normalizedUser);
+      return { success: true, role: normalizedUser.role };
+    }
+
+    // 2. Check built-in mock users
+    const foundMock = mockUsers.find((u) => {
+      const uname = (u.username || "").trim().toLowerCase();
+      const uemail = (u.email || "").trim().toLowerCase();
+      const matchIdent = uname === cleanIdent || (uemail && uemail === cleanIdent);
+      return matchIdent && u.password === cleanPassword;
+    });
+
+    if (foundMock) {
+      localStorage.removeItem("rbps_token");
+      const normalizedUser = {
+        ...foundMock,
+        role: normalizeRole(foundMock.role),
+      };
+      setUser(normalizedUser);
+      return { success: true, role: normalizedUser.role };
+    }
+
     return { success: false, message: "Invalid username or password" };
   };
 

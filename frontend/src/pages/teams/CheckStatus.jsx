@@ -148,13 +148,7 @@ export default function CheckStatus() {
                                   </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                                  <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                    <span className="text-[10px] text-gray-400 font-semibold block uppercase">Original Window</span>
-                                    <span className="font-mono text-gray-500 line-through font-semibold text-xs">
-                                      {r.raw?.preferred_start_time || "19:00"} - {r.raw?.preferred_end_time || "21:00"}
-                                    </span>
-                                  </div>
+                                <div className={`grid grid-cols-1 ${r.prohibitedWindow ? "sm:grid-cols-2" : "sm:grid-cols-1"} gap-2.5 text-xs`}>
                                   {r.prohibitedWindow && (
                                     <div className="bg-rose-50 p-2 rounded-lg border border-rose-200">
                                       <span className="text-[10px] text-rose-600 font-bold block uppercase flex items-center gap-1">

@@ -53,12 +53,14 @@ class TrafficAgent:
     VERSION = "traffic-rules@2.1.0"
     _network_graph = None
     _track_coordinates = None
+    _track_names = None
     _reroute_cache = {}
 
     def __init__(self):
         self.last_schedule_source = "UNKNOWN"
         self.last_schedule_authoritative = False
         self.graph, self.track_coordinates = self._load_track_network()
+        self.track_names = self._track_names or {}
 
     @staticmethod
     def _node(coordinate):
@@ -87,15 +89,20 @@ class TrafficAgent:
         source_path = next((path for path in candidates if path and path.exists()), None)
         graph = nx.MultiGraph()
         track_coordinates = {}
+        track_names = {}
         if source_path:
             with source_path.open(encoding="utf-8") as source:
                 collection = json.load(source)
             for feature in collection.get("features", []):
-                track_id = feature.get("properties", {}).get("track_id")
+                props = feature.get("properties", {})
+                track_id = props.get("track_id")
+                name = props.get("name")
                 coordinates = feature.get("geometry", {}).get("coordinates", [])
                 if not track_id or len(coordinates) < 2:
                     continue
                 track_coordinates[track_id] = coordinates
+                if name:
+                    track_names[track_id] = name
                 for index, (first, second) in enumerate(zip(coordinates, coordinates[1:])):
                     start = cls._node(first)
                     end = cls._node(second)
@@ -109,63 +116,131 @@ class TrafficAgent:
 
         cls._network_graph = graph
         cls._track_coordinates = track_coordinates
+        cls._track_names = track_names
         return graph, track_coordinates
 
-    def find_available_reroute(self, blocked_track_id: str):
+    def find_available_reroute(self, blocked_track_id: str, blocked_track_ids: list = None):
         """Return a route made exclusively from GeoJSON railway edges, or None."""
-        if blocked_track_id in self._reroute_cache:
-            return self._reroute_cache[blocked_track_id]
-        blocked_coordinates = self.track_coordinates.get(blocked_track_id)
-        if not blocked_coordinates or self.graph.number_of_edges() == 0:
-            self._reroute_cache[blocked_track_id] = None
+        blocked_set = set(blocked_track_ids) if blocked_track_ids else set()
+        if blocked_track_id:
+            blocked_set.add(blocked_track_id)
+
+        cache_key = tuple(sorted(blocked_set)) if blocked_set else blocked_track_id
+        if cache_key in self._reroute_cache:
+            return self._reroute_cache[cache_key]
+
+        if not blocked_set or self.graph.number_of_edges() == 0:
+            self._reroute_cache[cache_key] = None
             return None
 
-        start = self._node(blocked_coordinates[0])
-        end = self._node(blocked_coordinates[-1])
-        base_distance = sum(
-            self._distance_km(self._node(first), self._node(second))
-            for first, second in zip(blocked_coordinates, blocked_coordinates[1:])
-        )
+        # Check if any blocked track belongs to a named bypass line or corridor segment.
+        # If so, expand blocked_set to include all segments of that named bypass line so trains don't take
+        # impossible backtrack loops or run on parallel tracks of the blocked bypass.
+        named_bypass = None
+        for tid in list(blocked_set):
+            t_name = self.track_names.get(tid)
+            if t_name and ("Bypass" in t_name or len(blocked_set) > 1):
+                named_bypass = t_name
+                break
+
+        if named_bypass:
+            for tid, t_name in self.track_names.items():
+                if t_name == named_bypass:
+                    blocked_set.add(tid)
+
+        blocked_nodes = set()
+        for tid in blocked_set:
+            coords = self.track_coordinates.get(tid)
+            if coords:
+                for c in coords:
+                    blocked_nodes.add(self._node(c))
+
         available_graph = nx.subgraph_view(
             self.graph,
-            filter_edge=lambda first, second, key: self.graph[first][second][key].get("trackId") != blocked_track_id,
+            filter_edge=lambda first, second, key: self.graph[first][second][key].get("trackId") not in blocked_set,
         )
-        try:
-            path = nx.shortest_path(available_graph, start, end, weight="weight")
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            self._reroute_cache[blocked_track_id] = None
+
+        gateways = [n for n in blocked_nodes if n in available_graph and available_graph.degree(n) > 0]
+        if not gateways:
+            self._reroute_cache[cache_key] = None
             return None
 
-        route_distance = 0.0
-        route_track_ids = []
-        for first, second in zip(path, path[1:]):
-            candidates = [
-                data for data in self.graph[first][second].values()
-                if data.get("trackId") != blocked_track_id
-            ]
-            if not candidates:
-                self._reroute_cache[blocked_track_id] = None
-                return None
-            edge = min(candidates, key=lambda data: data.get("weight", float("inf")))
-            route_distance += edge["weight"]
-            if not route_track_ids or route_track_ids[-1] != edge["trackId"]:
-                route_track_ids.append(edge["trackId"])
-
-        # Reject geographically connected but operationally implausible network walks.
-        if route_distance > base_distance + max(50.0, base_distance * 1.5):
-            self._reroute_cache[blocked_track_id] = None
+        ref_coords = self.track_coordinates.get(blocked_track_id) or next(
+            (self.track_coordinates[t] for t in blocked_set if t in self.track_coordinates), None
+        )
+        if not ref_coords:
+            self._reroute_cache[cache_key] = None
             return None
 
-        route = {
-            "type": "LineString",
-            "coordinates": [list(node) for node in path],
-            "source": "OSM_RAIL_NETWORK",
-            "trackIds": route_track_ids,
-            "distanceKm": round(route_distance, 1),
-            "extraDistanceKm": round(max(0.0, route_distance - base_distance), 1),
-        }
-        self._reroute_cache[blocked_track_id] = route
-        return route
+        orig_start = self._node(ref_coords[0])
+        orig_end = self._node(ref_coords[-1])
+
+        if orig_start in gateways:
+            start = orig_start
+        else:
+            start = min(gateways, key=lambda g: self._distance_km(orig_start, g))
+
+        candidates = sorted([g for g in gateways if g != start], key=lambda g: self._distance_km(start, g), reverse=True)
+        if len(blocked_set) == 1 and orig_end in candidates and not named_bypass:
+            candidates.remove(orig_end)
+            candidates.insert(0, orig_end)
+
+        base_distance = sum(
+            self._distance_km(self._node(first), self._node(second))
+            for first, second in zip(ref_coords, ref_coords[1:])
+        )
+        if len(blocked_set) > 1:
+            base_distance = max(
+                base_distance,
+                sum(
+                    sum(self._distance_km(self._node(a), self._node(b)) for a, b in zip(self.track_coordinates[tid], self.track_coordinates[tid][1:]))
+                    for tid in blocked_set if tid in self.track_coordinates
+                ) / 2
+            )
+
+        best_route = None
+        for end in candidates:
+            try:
+                path = nx.shortest_path(available_graph, start, end, weight="weight")
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+
+            route_distance = 0.0
+            route_track_ids = []
+            edge_failed = False
+            for first, second in zip(path, path[1:]):
+                candidate_edges = [
+                    data for data in available_graph[first][second].values()
+                    if data.get("trackId") not in blocked_set
+                ]
+                if not candidate_edges:
+                    edge_failed = True
+                    break
+                edge = min(candidate_edges, key=lambda data: data.get("weight", float("inf")))
+                route_distance += edge["weight"]
+                if not route_track_ids or route_track_ids[-1] != edge["trackId"]:
+                    route_track_ids.append(edge["trackId"])
+
+            if edge_failed:
+                continue
+
+            if route_distance > base_distance + max(50.0, base_distance * 2.0):
+                continue
+
+            best_route = {
+                "type": "LineString",
+                "coordinates": [list(node) for node in path],
+                "source": "OSM_RAIL_NETWORK",
+                "trackIds": route_track_ids,
+                "distanceKm": round(route_distance, 1),
+                "extraDistanceKm": round(max(0.0, route_distance - base_distance), 1),
+            }
+            break
+
+        self._reroute_cache[cache_key] = best_route
+        if blocked_track_id and cache_key != blocked_track_id:
+            self._reroute_cache[blocked_track_id] = best_route
+        return best_route
 
     def fetch_track_schedules(self, track_id: str) -> list:
         url = f"http://localhost:5000/api/tracks/{track_id}/schedule"
@@ -197,14 +272,21 @@ class TrafficAgent:
                 conflicts.append(train)
         return conflicts
 
-    def analyze_traffic(self, track_id: str, start_time: str, end_time: str, schedules: list = None) -> dict:
+    def analyze_traffic(
+        self,
+        track_id: str,
+        start_time: str,
+        end_time: str,
+        schedules: list = None,
+        blocked_track_ids: list = None,
+    ) -> dict:
         # Get actual schedules for this specific track unless a consistent snapshot was supplied.
         scheduled_trains = schedules if schedules is not None else self.fetch_track_schedules(track_id)
         conflicts = self._find_conflicts(scheduled_trains, start_time, end_time)
 
         # A reroute is feasible only when a connected path exists in the loaded
         # railway GeoJSON after every edge of the blocked track is removed.
-        reroute = self.find_available_reroute(track_id)
+        reroute = self.find_available_reroute(track_id, blocked_track_ids=blocked_track_ids)
         reroute_feasible = reroute is not None
         reroute_details = (
             f"Available via {len(reroute['trackIds'])} track segment(s) (+{reroute['extraDistanceKm']} km)"

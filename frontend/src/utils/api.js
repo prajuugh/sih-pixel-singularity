@@ -46,8 +46,37 @@ export async function loginRequest(username, password) {
     console.warn("Backend auth offline, using fallback mock users:", err.message);
   }
 
+  const cleanIdent = (username || "").trim().toLowerCase();
+  const cleanPassword = (password || "").trim();
+
+  let adminUsers = [];
+  try {
+    const stored = localStorage.getItem("rbps_admin_users");
+    if (stored) adminUsers = JSON.parse(stored);
+  } catch (e) {
+    console.warn("Could not load rbps_admin_users in api.js", e);
+  }
+
+  const foundAdmin = adminUsers.find((u) => {
+    const uname = (u.username || "").trim().toLowerCase();
+    const uemail = (u.email || "").trim().toLowerCase();
+    const unameDisplay = (u.name || "").trim().toLowerCase();
+    const match = uname === cleanIdent || uemail === cleanIdent || unameDisplay === cleanIdent;
+    const expected = (u.password || "123456").trim();
+    return match && expected === cleanPassword;
+  });
+
+  if (foundAdmin) {
+    const role = (foundAdmin.role || "").toLowerCase();
+    const normalizedRole = role === "officer" ? "officer" : role === "admin" ? "admin" : "teams";
+    return delay({ success: true, user: { ...foundAdmin, role: normalizedRole } });
+  }
+
   const found = mockUsers.find(
-    (u) => u.username === username && u.password === password
+    (u) =>
+      ((u.username || "").trim().toLowerCase() === cleanIdent ||
+        (u.email || "").trim().toLowerCase() === cleanIdent) &&
+      u.password === cleanPassword
   );
   if (found) return delay({ success: true, user: found });
   return delay({ success: false, message: "Invalid username or password" });
@@ -166,7 +195,7 @@ export async function submitRequest(payload) {
   }
 }
 
-export async function updateRequestStatus(requestId, status, decision = "APPROVED", feedback = "", alternativeId = null, prohibitedWindow = null) {
+export async function updateRequestStatus(requestId, status, decision = "APPROVED", feedback = "", alternativeId = null, prohibitedWindow = null, newWindow = null) {
   try {
     const headers = getAuthHeaders("OFFICER");
     const res = await fetch(`${BASE_URL}/requests/${requestId}/review`, {
@@ -177,6 +206,7 @@ export async function updateRequestStatus(requestId, status, decision = "APPROVE
         feedback: feedback || `Officer status changed to ${status}`,
         alternative_id: alternativeId,
         prohibited_window: prohibitedWindow,
+        new_window: newWindow,
       }),
     });
     if (res.ok) {

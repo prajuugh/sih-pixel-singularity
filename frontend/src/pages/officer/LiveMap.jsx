@@ -316,13 +316,23 @@ export default function LiveMap() {
       setConflictData(conflict);
 
       // 3. AI plan
-      const plan = await fetchAgentPlan({
-        trackId,
-        planningDate: "2026-09-15",
-        startTime: "19:00",
-        endTime: "20:30",
-        durationMinutes: 90,
-      });
+      const matchingReq = requests.find((r) =>
+        (detourCaseId && (r.id === detourCaseId || r.request_id === detourCaseId)) ||
+        (r.raw?.track_id === trackId || r.track_id === trackId || (r.raw?.track_ids || r.track_ids || []).includes(trackId))
+      );
+      const reqTrackIds = matchingReq?.raw?.track_ids || matchingReq?.track_ids || [trackId];
+
+      let plan = matchingReq?.agentPlan || matchingReq?.agent_plan || null;
+      if (!plan || !plan.alternatives?.length) {
+        plan = await fetchAgentPlan({
+          trackId,
+          trackIds: reqTrackIds,
+          planningDate: matchingReq?.date || matchingReq?.requested_date || "2026-09-15",
+          startTime: matchingReq?.raw?.preferred_start_time || "19:00",
+          endTime: matchingReq?.raw?.preferred_end_time || "20:30",
+          durationMinutes: matchingReq?.raw?.estimated_duration_minutes || 90,
+        });
+      }
       setAgentPlan(plan);
     } catch (err) {
       console.error("Error loading track details:", err);
