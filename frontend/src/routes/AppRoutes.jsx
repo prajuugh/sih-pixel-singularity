@@ -106,7 +106,7 @@ export default function AppRoutes() {
         path="/teams/requests"
         element={
           <ProtectedRoute allowedRole="teams">
-            <TeamRequests />
+            <LiveMap isSubmitDefault={true} />
           </ProtectedRoute>
         }
       />
@@ -123,6 +123,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRole="teams">
             <CheckStatus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/live-map"
+        element={
+          <ProtectedRoute allowedRole="teams">
+            <LiveMap />
           </ProtectedRoute>
         }
       />

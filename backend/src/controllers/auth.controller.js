@@ -16,8 +16,13 @@ async function login(req, res, next) {
       });
     }
 
+    const ident = loginIdentifier.toLowerCase().trim();
     const user = fallbackStore.users.find(
-      (u) => u.email === loginIdentifier || u.name.toLowerCase().includes(loginIdentifier.toLowerCase()) || u.email.startsWith(loginIdentifier)
+      (u) =>
+        (u.username && u.username.toLowerCase() === ident) ||
+        (u.email && u.email.toLowerCase() === ident) ||
+        (u.name && u.name.toLowerCase().includes(ident)) ||
+        (u.email && u.email.toLowerCase().startsWith(ident))
     );
 
     if (!user) {

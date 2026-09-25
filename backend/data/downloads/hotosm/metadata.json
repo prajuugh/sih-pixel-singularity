@@ -1,0 +1,370 @@
+{
+  "feature_count": 107081,
+  "geometry_types": {
+    "LINESTRING": 97759,
+    "POINT": 8947,
+    "POLYGON": 375
+  },
+  "bbox": [
+    68.8252367,
+    8.0877028,
+    95.7766971,
+    34.258425
+  ],
+  "columns": [
+    {
+      "name": "id",
+      "type": "VARCHAR",
+      "null_count": 0,
+      "null_percent": 0.0,
+      "distinct_count": 107081,
+      "top_values": []
+    },
+    {
+      "name": "name",
+      "type": "VARCHAR",
+      "null_count": 80934,
+      "null_percent": 75.58,
+      "distinct_count": 9671,
+      "top_values": []
+    },
+    {
+      "name": "name_en",
+      "type": "VARCHAR",
+      "null_count": 106073,
+      "null_percent": 99.06,
+      "distinct_count": 510,
+      "top_values": [
+        {
+          "value": "Line 2: Chennai Egmore - Nagercoil",
+          "count": 198
+        },
+        {
+          "value": "Line 1: Nagercoil - Chennai Egmore",
+          "count": 189
+        },
+        {
+          "value": "Madurai - Aruppukottai - Thoothukudi Line",
+          "count": 39
+        },
+        {
+          "value": "Nepal Railways",
+          "count": 23
+        },
+        {
+          "value": "Coimbatore Bypass Line",
+          "count": 10
+        }
+      ]
+    },
+    {
+      "name": "name_hi",
+      "type": "VARCHAR",
+      "null_count": 105280,
+      "null_percent": 98.32,
+      "distinct_count": 1731,
+      "top_values": []
+    },
+    {
+      "name": "railway",
+      "type": "VARCHAR",
+      "null_count": 0,
+      "null_percent": 0.0,
+      "distinct_count": 2,
+      "top_values": [
+        {
+          "value": "rail",
+          "count": 97764
+        },
+        {
+          "value": "station",
+          "count": 9317
+        }
+      ]
+    },
+    {
+      "name": "ele",
+      "type": "VARCHAR",
+      "null_count": 107081,
+      "null_percent": 100.0,
+      "distinct_count": 0,
+      "top_values": []
+    },
+    {
+      "name": "operator_type",
+      "type": "VARCHAR",
+      "null_count": 107080,
+      "null_percent": 100.0,
+      "distinct_count": 1,
+      "top_values": [
+        {
+          "value": "private",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "layer",
+      "type": "VARCHAR",
+      "null_count": 87210,
+      "null_percent": 81.44,
+      "distinct_count": 10,
+      "top_values": [
+        {
+          "value": "1",
+          "count": 18838
+        },
+        {
+          "value": "-1",
+          "count": 715
+        },
+        {
+          "value": "2",
+          "count": 176
+        },
+        {
+          "value": "3",
+          "count": 68
+        },
+        {
+          "value": "0",
+          "count": 67
+        }
+      ]
+    },
+    {
+      "name": "addr_full",
+      "type": "VARCHAR",
+      "null_count": 107080,
+      "null_percent": 100.0,
+      "distinct_count": 1,
+      "top_values": [
+        {
+          "value": "774, Vaishali Nagar",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "addr_city",
+      "type": "VARCHAR",
+      "null_count": 106884,
+      "null_percent": 99.82,
+      "distinct_count": 161,
+      "top_values": [
+        {
+          "value": "Navi Mumbai",
+          "count": 17
+        },
+        {
+          "value": "Meerut",
+          "count": 3
+        },
+        {
+          "value": "Ahmedabad",
+          "count": 3
+        },
+        {
+          "value": "Mumbai",
+          "count": 2
+        },
+        {
+          "value": "Mehsi",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "name": "source",
+      "type": "VARCHAR",
+      "null_count": 107081,
+      "null_percent": 100.0,
+      "distinct_count": 0,
+      "top_values": []
+    },
+    {
+      "name": "adm0_pcode",
+      "type": "VARCHAR",
+      "null_count": 0,
+      "null_percent": 0.0,
+      "distinct_count": 1,
+      "top_values": [
+        {
+          "value": "IND",
+          "count": 107081
+        }
+      ]
+    },
+    {
+      "name": "adm0_name",
+      "type": "VARCHAR",
+      "null_count": 0,
+      "null_percent": 0.0,
+      "distinct_count": 1,
+      "top_values": [
+        {
+          "value": "India",
+          "count": 107081
+        }
+      ]
+    },
+    {
+      "name": "adm1_pcode",
+      "type": "VARCHAR",
+      "null_count": 1036,
+      "null_percent": 0.97,
+      "distinct_count": 30,
+      "top_values": [
+        {
+          "value": "1811400B11231190780494",
+          "count": 12562
+        },
+        {
+          "value": "1811400B15614733245507",
+          "count": 10099
+        },
+        {
+          "value": "1811400B21167269026319",
+          "count": 8757
+        },
+        {
+          "value": "1811400B32673734874058",
+          "count": 8008
+        },
+        {
+          "value": "1811400B80305611676067",
+          "count": 6176
+        }
+      ]
+    },
+    {
+      "name": "adm1_name",
+      "type": "VARCHAR",
+      "null_count": 1036,
+      "null_percent": 0.97,
+      "distinct_count": 30,
+      "top_values": [
+        {
+          "value": "Uttar Pradesh",
+          "count": 12562
+        },
+        {
+          "value": "Mah\u0101r\u0101shtra",
+          "count": 10099
+        },
+        {
+          "value": "Tamil N\u0101du",
+          "count": 8757
+        },
+        {
+          "value": "West Bengal",
+          "count": 8008
+        },
+        {
+          "value": "Gujar\u0101t",
+          "count": 6176
+        }
+      ]
+    },
+    {
+      "name": "adm2_pcode",
+      "type": "VARCHAR",
+      "null_count": 1036,
+      "null_percent": 0.97,
+      "distinct_count": 589,
+      "top_values": [
+        {
+          "value": "76128533B74859418903113",
+          "count": 1159
+        },
+        {
+          "value": "76128533B15993411864574",
+          "count": 1105
+        },
+        {
+          "value": "76128533B99895802074414",
+          "count": 1062
+        },
+        {
+          "value": "76128533B6128685860104",
+          "count": 1037
+        },
+        {
+          "value": "76128533B71380851181380",
+          "count": 1004
+        }
+      ]
+    },
+    {
+      "name": "adm2_name",
+      "type": "VARCHAR",
+      "null_count": 1036,
+      "null_percent": 0.97,
+      "distinct_count": 585,
+      "top_values": [
+        {
+          "value": "Raigarh",
+          "count": 1311
+        },
+        {
+          "value": "Thane",
+          "count": 1159
+        },
+        {
+          "value": "Durg",
+          "count": 1105
+        },
+        {
+          "value": "Sundargarh",
+          "count": 1037
+        },
+        {
+          "value": "Pune",
+          "count": 1004
+        }
+      ]
+    },
+    {
+      "name": "adm3_pcode",
+      "type": "VARCHAR",
+      "null_count": 1036,
+      "null_percent": 0.97,
+      "distinct_count": 3233,
+      "top_values": []
+    },
+    {
+      "name": "adm3_name",
+      "type": "VARCHAR",
+      "null_count": 1036,
+      "null_percent": 0.97,
+      "distinct_count": 3153,
+      "top_values": []
+    },
+    {
+      "name": "adm4_pcode",
+      "type": "VARCHAR",
+      "null_count": 107081,
+      "null_percent": 100.0,
+      "distinct_count": 0,
+      "top_values": []
+    },
+    {
+      "name": "adm4_name",
+      "type": "VARCHAR",
+      "null_count": 107081,
+      "null_percent": 100.0,
+      "distinct_count": 0,
+      "top_values": []
+    },
+    {
+      "name": "name_latin",
+      "type": "VARCHAR",
+      "null_count": 80921,
+      "null_percent": 75.57,
+      "distinct_count": 9673,
+      "top_values": []
+    }
+  ],
+  "summary": "107,081 features. geometry types: 97,759 LINESTRING, 8,947 POINT, 375 POLYGON. 12 of 22 columns are >=50% null (name, name_en, name_hi, ele, operator_type, layer, addr_full, addr_city, source, adm4_pcode, adm4_name, name_latin).",
+  "temporal": null
+}

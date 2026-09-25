@@ -220,18 +220,18 @@ export async function updateRequestStatus(requestId, status, decision = "APPROVE
 }
 
 // ---- Railway Tracks & Train Information API ----
-
-const LOCAL_TRACKS_URL = "/railway_tracks.geojson";
+const LOCAL_TRACKS_URL = "/india_railways_network.geojson";
+const REGIONAL_TRACKS_URL = "/karnataka_tracks.geojson";
 
 function isTrackFeatureCollection(data) {
   return data?.type === "FeatureCollection" && Array.isArray(data.features) && data.features.length > 0;
 }
 
-// Returns the full GeoJSON FeatureCollection. The checked-in snapshot keeps the
-// map usable when the API service is not running (for example in a frontend-only demo).
-export async function fetchTracks() {
+// Returns GeoJSON FeatureCollection for India or regional network
+export async function fetchTracks(scope = "india") {
   try {
-    const res = await fetch(`${BASE_URL}/tracks`);
+    const q = scope ? `?scope=${scope}` : "";
+    const res = await fetch(`${BASE_URL}/tracks${q}`);
     if (res.ok) {
       const data = await res.json();
       if (isTrackFeatureCollection(data)) return data;
@@ -240,15 +240,70 @@ export async function fetchTracks() {
     console.warn("Backend tracks offline, using local railway snapshot:", err.message);
   }
 
-  const fallbackResponse = await fetch(LOCAL_TRACKS_URL);
-  if (!fallbackResponse.ok) {
-    throw new Error(`Railway snapshot unavailable (${fallbackResponse.status})`);
+  const fallbackUrl = scope === "karnataka" ? REGIONAL_TRACKS_URL : LOCAL_TRACKS_URL;
+  try {
+    const fallbackResponse = await fetch(fallbackUrl);
+    if (fallbackResponse.ok) {
+      const fallbackData = await fallbackResponse.json();
+      if (isTrackFeatureCollection(fallbackData)) return fallbackData;
+    }
+  } catch (e) {}
+
+  const fallbackResponse2 = await fetch("/railway_tracks.geojson");
+  if (fallbackResponse2.ok) {
+    const fallbackData2 = await fallbackResponse2.json();
+    if (isTrackFeatureCollection(fallbackData2)) return fallbackData2;
   }
-  const fallbackData = await fallbackResponse.json();
-  if (!isTrackFeatureCollection(fallbackData)) {
-    throw new Error("Railway snapshot contains no track segments");
+  throw new Error("Railway network snapshot unavailable");
+}
+
+export async function fetchTrainsList(paramsOrSearch = "", limit = 50, offset = 0) {
+  try {
+    let q = "";
+    const isObject = typeof paramsOrSearch === "object" && paramsOrSearch !== null;
+    if (isObject) {
+      const p = new URLSearchParams();
+      if (paramsOrSearch.search) p.append("search", paramsOrSearch.search);
+      if (paramsOrSearch.type && paramsOrSearch.type !== "ALL") p.append("type", paramsOrSearch.type);
+      if (paramsOrSearch.zone && paramsOrSearch.zone !== "ALL") p.append("zone", paramsOrSearch.zone);
+      p.append("limit", paramsOrSearch.limit || limit || 50);
+      p.append("offset", paramsOrSearch.offset || offset || 0);
+      q = `?${p.toString()}`;
+    } else {
+      const searchStr = paramsOrSearch ? `&search=${encodeURIComponent(paramsOrSearch)}` : "";
+      q = `?limit=${limit}&offset=${offset}${searchStr}`;
+    }
+
+    const res = await fetch(`${BASE_URL}/trains${q}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (isObject) {
+        return json.data || { total: 0, count: 0, offset: 0, limit: 50, trains: [] };
+      }
+      return json.data?.trains || [];
+    }
+  } catch (err) {
+    console.warn("Backend trains list offline:", err.message);
   }
-  return fallbackData;
+  return typeof paramsOrSearch === "object" ? { total: 0, count: 0, offset: 0, limit: 50, trains: [] } : [];
+}
+
+// Returns upcoming scheduled departures based on current Indian Standard Time
+export async function fetchUpcomingTrains({ zone = "ALL", type = "ALL", limit = 30 } = {}) {
+  try {
+    const p = new URLSearchParams();
+    if (zone && zone !== "ALL") p.append("zone", zone);
+    if (type && type !== "ALL") p.append("type", type);
+    p.append("limit", limit);
+    const res = await fetch(`${BASE_URL}/trains/upcoming?${p.toString()}`);
+    if (res.ok) {
+      const json = await res.json();
+      return json.data || [];
+    }
+  } catch (err) {
+    console.warn("Backend upcoming trains offline:", err.message);
+  }
+  return [];
 }
 
 // Returns train schedules for a specific track segment
@@ -263,6 +318,69 @@ export async function fetchTrackSchedule(trackId, day) {
     console.warn("Backend track schedule offline:", err.message);
   }
   return { trackId, schedules: [] };
+}
+
+// Returns live train positions across the network
+export async function fetchLiveTrains(params = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (params.zone && params.zone !== "ALL") query.set("zone", params.zone);
+    if (params.type && params.type !== "ALL") query.set("type", params.type);
+    if (params.search) query.set("search", params.search);
+    if (params.limit) query.set("limit", params.limit);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    const res = await fetch(`${BASE_URL}/trains/live${qs}`);
+    if (res.ok) {
+      const json = await res.json();
+      return json;
+    }
+  } catch (err) {
+    console.warn("Backend live trains offline:", err.message);
+  }
+  return { success: false, total: 0, count: 0, data: [] };
+}
+
+// Returns live trains matched to a specific section
+export async function fetchSectionLive(trackId) {
+  try {
+    const res = await fetch(`${BASE_URL}/tracks/${trackId}/live`);
+    if (res.ok) {
+      const json = await res.json();
+      return json.trains || [];
+    }
+  } catch (err) {
+    console.warn("Backend section live offline:", err.message);
+  }
+  return [];
+}
+
+// Returns route timetable stops for a specific train
+export async function fetchTrainRoute(trainNo) {
+  try {
+    const res = await fetch(`${BASE_URL}/trains/${trainNo}/route`);
+    if (res.ok) {
+      const json = await res.json();
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("Backend train route offline:", err.message);
+  }
+  return null;
+}
+
+// Search official Indian Railway stations
+export async function fetchStations(search = "", limit = 20) {
+  try {
+    const q = search ? `&search=${encodeURIComponent(search)}` : "";
+    const res = await fetch(`${BASE_URL}/stations?limit=${limit}${q}`);
+    if (res.ok) {
+      const json = await res.json();
+      return json.data?.stations || [];
+    }
+  } catch (err) {
+    console.warn("Backend stations offline:", err.message);
+  }
+  return [];
 }
 
 export async function fetchTrackTraffic(trackId) {

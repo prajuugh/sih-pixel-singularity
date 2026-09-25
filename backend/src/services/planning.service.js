@@ -20,9 +20,23 @@ async function generatePlan(startDate, horizon = "WEEKLY", userId = 1) {
   fallbackStore.block_plans.push(newPlan);
 
   // Group pending maintenance tasks and submitted requests
-  const pendingRequests = fallbackStore.maintenance_requests.filter(
-    (r) => r.status === "SUBMITTED" || r.status === "APPROVED"
+  let pendingRequests = fallbackStore.maintenance_requests.filter(
+    (r) => r.status === "SUBMITTED" || r.status === "APPROVED" || r.status === "REVISION_REQUIRED"
   );
+
+  if (pendingRequests.length === 0 && fallbackStore.maintenance_tasks.length > 0) {
+    const tasks = fallbackStore.maintenance_tasks.slice(0, 3);
+    pendingRequests = tasks.map((t) => ({
+      request_id: t.task_id,
+      requested_date: startDate || t.due_date || "2026-09-15",
+      track_id: t.track_id,
+      track_ids: [t.track_id],
+      estimated_duration_minutes: t.estimated_duration_minutes || 120,
+      preferred_start_time: "19:00",
+      preferred_end_time: "21:00",
+      status: "SUBMITTED",
+    }));
+  }
 
   const generatedBlocks = [];
   const generatedAlternatives = [];

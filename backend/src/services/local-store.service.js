@@ -28,8 +28,18 @@ function persistLocalStore(store) {
   const directory = path.dirname(storePath);
   const tempPath = `${storePath}.tmp`;
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(tempPath, JSON.stringify(snapshotStore(store), null, 2), "utf8");
-  fs.renameSync(tempPath, storePath);
+  const content = JSON.stringify(snapshotStore(store), null, 2);
+  try {
+    fs.writeFileSync(tempPath, content, "utf8");
+    try {
+      fs.renameSync(tempPath, storePath);
+    } catch (e) {
+      fs.copyFileSync(tempPath, storePath);
+      try { fs.unlinkSync(tempPath); } catch (_) {}
+    }
+  } catch (err) {
+    fs.writeFileSync(storePath, content, "utf8");
+  }
 }
 
 function hydrateLocalStore(store) {

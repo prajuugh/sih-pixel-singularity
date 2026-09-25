@@ -16,6 +16,7 @@ const maintenanceRoutes = require("./routes/maintenance.routes");
 const trainsRoutes = require("./routes/trains.routes");
 const corridorsRoutes = require("./routes/corridors.routes");
 const planningRoutes = require("./routes/planning.routes");
+const stationsRoutes = require("./routes/stations.routes");
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.get("/api/health", (req, res) => {
 // Mount REST Endpoints
 app.use("/api/auth", authRoutes);
 app.use("/api/tracks", tracksRoutes);
+app.use("/api/stations", stationsRoutes);
 app.use("/api/requests", requestsRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/trains", trainsRoutes);

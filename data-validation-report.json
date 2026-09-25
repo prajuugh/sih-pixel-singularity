@@ -1,0 +1,87 @@
+{
+  "timestamp": "2026-09-18T16:10:06.525Z",
+  "status": "PASSED",
+  "summary": {
+    "total_stations": 8990,
+    "total_official_trains": 5208,
+    "total_timetable_stops": 417080,
+    "total_track_sections": 5461,
+    "total_train_section_schedules": 25254,
+    "active_live_trains": 23,
+    "active_live_provider": "MOCK_PHYSICS_SIMULATION"
+  },
+  "datasets": {},
+  "compliance": {
+    "claims_synthetic_as_official_ir": false,
+    "distinguishes_official_ir_data": true,
+    "distinguishes_osm_gis_identifiers": true,
+    "distinguishes_app_section_ids": true,
+    "uses_legitimate_sources": [
+      "Open Government Data (OGD) Platform India - Ministry of Railways",
+      "DataMeet Indian Railways Timetable Dataset",
+      "OpenStreetMap (OSM) Railway Network Geometry Extract"
+    ]
+  },
+  "checks": [
+    {
+      "name": "Stations Dataset Count",
+      "passed": true,
+      "details": "Found 8990 official Indian Railway stations (expected >= 8000)"
+    },
+    {
+      "name": "Stations Geocoding Quality",
+      "passed": true,
+      "details": "8697 stations have coordinates within India geographic bounds"
+    },
+    {
+      "name": "Trains Dataset Count",
+      "passed": true,
+      "details": "Found 5208 official trains (expected >= 5000)"
+    },
+    {
+      "name": "Official Train Numbers",
+      "passed": true,
+      "details": "All 5208 trains possess valid official train numbers (including Slip designations)"
+    },
+    {
+      "name": "Timetable Stops Count",
+      "passed": true,
+      "details": "Found 417080 timetable stops across 5208 train routes"
+    },
+    {
+      "name": "Section IDs Convention",
+      "passed": true,
+      "details": "All 5461 sections follow application format SEC-{FROM}-{TO} or SEC-OSM-{ID}"
+    },
+    {
+      "name": "OSM Geometry Provenance",
+      "passed": true,
+      "details": "All 5461 sections cite authentic OpenStreetMap source IDs (e.g. way/...)"
+    },
+    {
+      "name": "Train-to-Section Schedule Mappings",
+      "passed": true,
+      "details": "Mapped 25254 scheduled train traversals to physical track sections"
+    },
+    {
+      "name": "Live Train Service Provider",
+      "passed": true,
+      "details": "Live provider (MOCK_PHYSICS_SIMULATION) returned 23 active trains"
+    },
+    {
+      "name": "Live Train Section Matching",
+      "passed": true,
+      "details": "All 23 active live trains matched to spatial track sections"
+    },
+    {
+      "name": "Live Train GPS In Bounds",
+      "passed": true,
+      "details": "All 23 live trains currently positioned within Indian territory"
+    },
+    {
+      "name": "Track ID Disclaimer Compliance",
+      "passed": true,
+      "details": "No application section ID or legacy OSM ID is claimed as an official Indian Railways track ID"
+    }
+  ]
+}

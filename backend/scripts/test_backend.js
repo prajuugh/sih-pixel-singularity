@@ -28,8 +28,8 @@ async function runTests() {
 
   // Verification 1: Tracks count (5,461)
   assert(fallbackStore.tracks.length === 5461, `5,461 Karnataka track segments loaded (Found: ${fallbackStore.tracks.length})`);
-  assert(fallbackStore.tracks[0].track_id === "KA-T-000001", `Track ID format preserved KA-T-000001`);
-  assert(fallbackStore.tracks[5460].track_id === "KA-T-005461", `Track ID format preserved KA-T-005461`);
+  assert(fallbackStore.tracks[0].track_id.startsWith("SEC-") || fallbackStore.tracks[0].legacy_track_id === "KA-T-000001", `Section ID and legacy format preserved (${fallbackStore.tracks[0].track_id})`);
+  assert(fallbackStore.tracks[5460].track_id.startsWith("SEC-") || fallbackStore.tracks[5460].legacy_track_id === "KA-T-005461", `Section ID and legacy format preserved (${fallbackStore.tracks[5460].track_id})`);
 
   // Verification 2: Domain data quantities
   assert(fallbackStore.assets.length >= 300, `Assets count >= 300 (Found: ${fallbackStore.assets.length})`);

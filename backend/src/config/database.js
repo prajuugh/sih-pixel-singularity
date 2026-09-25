@@ -56,111 +56,18 @@ let useFallbackStore = false;
 
 // Embedded Data Store fallback for standalone / offline development
 const fallbackStore = {
-  users: [],
+  users: [
+    { id: 1, username: "admin", name: "System Admin", email: "admin@rbps.com", password_hash: "admin123", role: "ADMIN", department: null },
+    { id: 2, username: "officer1", name: "Officer Sharma", email: "officer.sharma@rbps.com", password_hash: "officer123", role: "OFFICER", department: "Control" },
+    { id: 3, username: "officer2", name: "Officer Patil", email: "officer.patil@rbps.com", password_hash: "officer123", role: "OFFICER", department: "Control" },
+    { id: 4, username: "eng_team", name: "Engineering Team Lead", email: "engineering@rbps.com", password_hash: "eng123", role: "TEAMS", department: "Engineering" },
+    { id: 5, username: "snt_team", name: "Signal & Telecom Team", email: "signaltelecom@rbps.com", password_hash: "snt123", role: "TEAMS", department: "Signal & Telecom" },
+    { id: 6, username: "trd_team", name: "Traction Distribution Team", email: "traction@rbps.com", password_hash: "trd123", role: "TEAMS", department: "Traction Distribution" },
+  ],
   tracks: [],
   assets: [],
   maintenance_tasks: [],
-  maintenance_requests: [
-    {
-      id: 1,
-      request_id: "ENG-2026-00001",
-      created_by: 3,
-      department: "Engineering",
-      asset_type: "TRACK",
-      asset_condition: "Good",
-      track_id: "KA-T-000342",
-      track_ids: ["KA-T-000342"],
-      task_type: "Track Tamping & Alignment",
-      description: "Ballast packing and dynamic track stabilization",
-      requested_date: "2026-09-15",
-      from_date: "2026-09-15",
-      to_date: "2026-09-15",
-      preferred_start_time: "19:00",
-      preferred_end_time: "21:00",
-      estimated_duration_minutes: 120,
-      required_block: true,
-      status: "APPROVED",
-      priority_score: 85,
-      conflict: false,
-      recommended_block: {
-        date: "2026-09-15",
-        startTime: "19:00",
-        endTime: "21:00",
-        trackId: "KA-T-000342",
-        priorityScore: 85
-      },
-      officer_feedback: "Approved by Section Engineer for 19:00-21:00 window",
-      officer_id: 2,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      id: 2,
-      request_id: "SIG-2026-00002",
-      created_by: 4,
-      department: "Signal & Telecom",
-      asset_type: "SIGNAL",
-      asset_condition: "Good",
-      track_id: "KA-T-000100",
-      track_ids: ["KA-T-000100"],
-      task_type: "Point Machine & Interlocking Overhaul",
-      description: "Dual motor point machine alignment & electronic relay testing",
-      requested_date: "2026-09-15",
-      from_date: "2026-09-15",
-      to_date: "2026-09-15",
-      preferred_start_time: "21:00",
-      preferred_end_time: "22:30",
-      estimated_duration_minutes: 90,
-      required_block: true,
-      status: "APPROVED",
-      priority_score: 78,
-      conflict: false,
-      recommended_block: {
-        date: "2026-09-15",
-        startTime: "21:00",
-        endTime: "22:30",
-        trackId: "KA-T-000100",
-        priorityScore: 78
-      },
-      officer_feedback: "Approved by Divisional Signal Officer",
-      officer_id: 2,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      id: 3,
-      request_id: "TRD-2026-00003",
-      created_by: 5,
-      department: "Traction Distribution",
-      asset_type: "OHE",
-      asset_condition: "Good",
-      track_id: "KA-T-000550",
-      track_ids: ["KA-T-000550"],
-      task_type: "OHE 25kV Cantilever & Wire Inspection",
-      description: "Overhead catenary inspection and contact wire height calibration",
-      requested_date: "2026-09-15",
-      from_date: "2026-09-15",
-      to_date: "2026-09-15",
-      preferred_start_time: "22:30",
-      preferred_end_time: "00:30",
-      estimated_duration_minutes: 120,
-      required_block: true,
-      status: "APPROVED",
-      priority_score: 92,
-      conflict: false,
-      recommended_block: {
-        date: "2026-09-15",
-        startTime: "22:30",
-        endTime: "00:30",
-        trackId: "KA-T-000550",
-        priorityScore: 92
-      },
-      officer_feedback: "Approved by Senior Divisional Electrical Engineer",
-      officer_id: 2,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-  ],
+  maintenance_requests: [],
   trains: [],
   train_route_segments: [],
   corridors: [],
@@ -176,6 +83,16 @@ const fallbackStore = {
   agent_runs: [],
   agent_steps: [],
   constraint_results: [],
+  stations: [],
+  track_sections: [],
+  train_stops: [],
+  train_section_schedule: [],
+  live_train_positions: [],
+  data_sources: [
+    { name: "OGD_INDIA_STATIONS", publisher: "Ministry of Railways / OGD India", status: "ACTIVE" },
+    { name: "OGD_INDIA_TRAINS", publisher: "Ministry of Railways / OGD India", status: "ACTIVE" },
+    { name: "OPENSTREETMAP_RAILWAYS", publisher: "OpenStreetMap Contributors", status: "ACTIVE" },
+  ],
 };
 
 function getPool() {
@@ -325,6 +242,32 @@ function queryFallback(text, params = []) {
       results = results.filter((c) => c.corridor_id === params[0]);
     }
     return { rows: results, rowCount: results.length };
+  }
+
+  if (sql.includes("FROM STATIONS")) {
+    let results = [...fallbackStore.stations];
+    if (sql.includes("WHERE STATION_CODE =")) {
+      const code = String(params[0]).toUpperCase();
+      results = results.filter((s) => s.station_code === code);
+    }
+    return { rows: results, rowCount: results.length };
+  }
+
+  if (sql.includes("FROM TRACK_SECTIONS")) {
+    let results = [...fallbackStore.track_sections];
+    if (sql.includes("WHERE SECTION_ID =") || sql.includes("WHERE TRACK_ID =")) {
+      const id = String(params[0]).toUpperCase();
+      results = results.filter((s) => s.section_id === id || s.track_id === id || s.legacy_track_id === id);
+    }
+    return { rows: results, rowCount: results.length };
+  }
+
+  if (sql.includes("FROM LIVE_TRAIN_POSITIONS")) {
+    return { rows: fallbackStore.live_train_positions, rowCount: fallbackStore.live_train_positions.length };
+  }
+
+  if (sql.includes("FROM DATA_SOURCES")) {
+    return { rows: fallbackStore.data_sources, rowCount: fallbackStore.data_sources.length };
   }
 
   return { rows: [], rowCount: 0 };

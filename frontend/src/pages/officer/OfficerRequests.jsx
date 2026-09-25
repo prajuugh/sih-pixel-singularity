@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, FileCheck, RefreshCw, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCheck, FileCheck, Package, RefreshCw, RotateCcw, TrainFront, Users } from "lucide-react";
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import RequestCard from "../../components/officer/RequestCard";
 import { fetchRequests, updateRequestStatus } from "../../utils/api";
+import { getRequestTrafficType } from "../../utils/trafficClassification";
 
 const FILTERS = [
   { value: "ALL", label: "All", icon: ClipboardCheck },
@@ -18,6 +19,7 @@ export default function OfficerRequests() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [queueFilter, setQueueFilter] = useState("ALL");
+  const [trafficFilter, setTrafficFilter] = useState("ALL");
 
   const loadRequests = async () => {
     setLoading(true);
@@ -94,16 +96,40 @@ export default function OfficerRequests() {
     APPROVED: requests.filter((request) => ["Approved", "APPROVED"].includes(request.raw?.status || request.status)).length,
   }), [pendingRequests, requests]);
 
+  const trafficCounts = useMemo(() => {
+    let passenger = 0;
+    let goods = 0;
+    pendingRequests.forEach((req) => {
+      const t = getRequestTrafficType(req);
+      if (t === "PASSENGER" || t === "MIXED") passenger++;
+      if (t === "GOODS" || t === "MIXED") goods++;
+    });
+    return {
+      ALL: pendingRequests.length,
+      PASSENGER: passenger,
+      GOODS: goods,
+    };
+  }, [pendingRequests]);
+
   const visibleRequests = useMemo(() => pendingRequests
     .filter((request) => {
+      // 1. Status Queue Filter
       const conflict = request.conflict || request.conflictingTrains?.length;
-      if (queueFilter === "CONFLICT") return Boolean(conflict);
-      if (queueFilter === "REVISION") return ["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status);
-      if (queueFilter === "READY") return !conflict;
+      if (queueFilter === "CONFLICT" && !conflict) return false;
+      if (queueFilter === "REVISION" && !["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status)) return false;
+      if (queueFilter === "READY" && conflict) return false;
+
+      // 2. Traffic Classification Filter
+      if (trafficFilter !== "ALL") {
+        const trafficType = getRequestTrafficType(request);
+        if (trafficFilter === "PASSENGER" && trafficType !== "PASSENGER" && trafficType !== "MIXED") return false;
+        if (trafficFilter === "GOODS" && trafficType !== "GOODS" && trafficType !== "MIXED") return false;
+      }
+
       return true;
     })
     .sort((a, b) => (b.priorityScore ?? b.agentPlan?.priorityScore ?? 0) - (a.priorityScore ?? a.agentPlan?.priorityScore ?? 0)),
-  [pendingRequests, queueFilter]);
+  [pendingRequests, queueFilter, trafficFilter]);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f5f7f8]">
@@ -131,18 +157,80 @@ export default function OfficerRequests() {
             {error && <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>{error}</span></div>}
 
             <section aria-labelledby="queue-heading">
-              <div className="mb-4 rounded-xl border border-[#d9e1e5] bg-white p-3 shadow-sm shadow-slate-900/[0.03] sm:flex sm:items-center sm:justify-between sm:gap-4">
-                <div className="mb-3 px-1 sm:mb-0">
-                  <h2 id="queue-heading" className="text-lg font-semibold text-[#172630]">Decision queue</h2>
-                  <p className="text-sm text-[#697780]">{visibleRequests.length} shown · sorted by priority</p>
+              <div className="mb-4 rounded-xl border border-[#d9e1e5] bg-white p-3.5 shadow-sm shadow-slate-900/[0.03] space-y-3">
+                <div className="sm:flex sm:items-center sm:justify-between sm:gap-4">
+                  <div className="mb-3 px-1 sm:mb-0">
+                    <h2 id="queue-heading" className="text-lg font-semibold text-[#172630]">Decision queue</h2>
+                    <p className="text-sm text-[#697780]">{visibleRequests.length} shown · sorted by priority</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#f1f5f6] p-1 sm:flex" aria-label="Filter request queue">
+                    {FILTERS.map(({ value, label, icon: Icon }) => (
+                      <button key={value} type="button" onClick={() => setQueueFilter(value)} aria-pressed={queueFilter === value} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] ${queueFilter === value ? "bg-white text-[#203f53] shadow-sm" : "text-[#60717d] hover:bg-white/70"}`}>
+                        <Icon size={16} aria-hidden="true" /> {label}
+                        <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs ${queueFilter === value ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>{counts[value]}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#f1f5f6] p-1 sm:flex" aria-label="Filter request queue">
-                  {FILTERS.map(({ value, label, icon: Icon }) => (
-                    <button key={value} type="button" onClick={() => setQueueFilter(value)} aria-pressed={queueFilter === value} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] ${queueFilter === value ? "bg-white text-[#203f53] shadow-sm" : "text-[#60717d] hover:bg-white/70"}`}>
-                      <Icon size={16} aria-hidden="true" /> {label}
-                      <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs ${queueFilter === value ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>{counts[value]}</span>
+
+                {/* Traffic Classification Filter Bar (Goods vs Passenger) */}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf1f3] pt-3 px-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#486071]">
+                    <TrainFront size={15} className="text-[#315b75]" aria-hidden="true" />
+                    <span>Traffic Classification Filter:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 rounded-lg bg-[#f1f5f6] p-1" aria-label="Filter by train traffic category">
+                    <button
+                      type="button"
+                      onClick={() => setTrafficFilter("ALL")}
+                      aria-pressed={trafficFilter === "ALL"}
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] transition-all ${
+                        trafficFilter === "ALL"
+                          ? "bg-white text-[#172630] shadow-xs font-bold"
+                          : "text-[#60717d] hover:bg-white/60"
+                      }`}
+                    >
+                      <TrainFront size={14} className={trafficFilter === "ALL" ? "text-[#315b75]" : "text-slate-400"} />
+                      <span>All Traffic</span>
+                      <span className={`rounded-full px-1.5 py-0.2 text-[11px] ${trafficFilter === "ALL" ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>
+                        {trafficCounts.ALL}
+                      </span>
                     </button>
-                  ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setTrafficFilter("PASSENGER")}
+                      aria-pressed={trafficFilter === "PASSENGER"}
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] transition-all ${
+                        trafficFilter === "PASSENGER"
+                          ? "bg-blue-700 text-white shadow-xs font-bold"
+                          : "text-[#60717d] hover:bg-white/60"
+                      }`}
+                    >
+                      <Users size={14} className={trafficFilter === "PASSENGER" ? "text-white" : "text-blue-600"} />
+                      <span>Passenger Trains</span>
+                      <span className={`rounded-full px-1.5 py-0.2 text-[11px] ${trafficFilter === "PASSENGER" ? "bg-white/25 text-white" : "bg-blue-100 text-blue-800"}`}>
+                        {trafficCounts.PASSENGER}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTrafficFilter("GOODS")}
+                      aria-pressed={trafficFilter === "GOODS"}
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] transition-all ${
+                        trafficFilter === "GOODS"
+                          ? "bg-amber-600 text-white shadow-xs font-bold"
+                          : "text-[#60717d] hover:bg-white/60"
+                      }`}
+                    >
+                      <Package size={14} className={trafficFilter === "GOODS" ? "text-white" : "text-amber-700"} />
+                      <span>Goods / Freight Trains</span>
+                      <span className={`rounded-full px-1.5 py-0.2 text-[11px] ${trafficFilter === "GOODS" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-900"}`}>
+                        {trafficCounts.GOODS}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

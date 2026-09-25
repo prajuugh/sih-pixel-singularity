@@ -45,10 +45,14 @@ function MapLifecycle({ active, panTarget }) {
 }
 
 const QUICK_HUBS = [
-  { label: "Hubballi", trackId: "KA-T-000342" },
-  { label: "Bengaluru", trackId: "KA-T-000120" },
-  { label: "Mysuru", trackId: "KA-T-000280" },
-  { label: "Ballari", trackId: "KA-T-000450" },
+  { label: "New Delhi (NDLS)", trackId: "SEC-CSB-NDLS" },
+  { label: "Mumbai (BCT)", trackId: "SEC-BCT-MX" },
+  { label: "Howrah (HWH)", trackId: "SEC-HWHG-HWH" },
+  { label: "Chennai (MAS)", trackId: "SEC-BBQ-MAS" },
+  { label: "Bengaluru (SBC)", trackId: "SEC-BNC-SBC" },
+  { label: "Hyderabad (SC)", trackId: "SEC-JET-SC" },
+  { label: "Ahmedabad (ADI)", trackId: "SEC-ADI-MAN" },
+  { label: "Hubballi (UBL)", trackId: "SEC-UBL-HBQ" },
 ];
 
 export default function TrackPickerMap({
@@ -122,11 +126,19 @@ export default function TrackPickerMap({
   const handleSearchSubmit = () => {
     if (!searchQuery.trim() || !tracks?.features) return;
     const q = searchQuery.trim().toUpperCase();
-    const found = tracks.features.find((f) =>
-      f.properties?.track_id?.toUpperCase().includes(q)
-    );
+    const found = tracks.features.find((f) => {
+      const p = f.properties || {};
+      return (
+        p.track_id?.toUpperCase().includes(q) ||
+        p.section_id?.toUpperCase().includes(q) ||
+        p.from_station?.toUpperCase() === q ||
+        p.to_station?.toUpperCase() === q ||
+        p.from_station_name?.toUpperCase().includes(q) ||
+        p.to_station_name?.toUpperCase().includes(q)
+      );
+    });
     if (found) {
-      const tid = found.properties.track_id;
+      const tid = found.properties.track_id || found.properties.section_id;
       if (found.geometry?.coordinates) {
         setPanTarget({ coords: found.geometry.coordinates, trackId: tid });
       }
@@ -137,7 +149,7 @@ export default function TrackPickerMap({
         setSearchMsg(`${tid} is already in possession`);
       }
     } else {
-      setSearchMsg(`Track “${searchQuery}” not found. Click a line on the map.`);
+      setSearchMsg(`Track or station “${searchQuery}” not found. Click a line on the map.`);
     }
   };
 
@@ -209,9 +221,9 @@ export default function TrackPickerMap({
       ) : (
         <div className="absolute inset-0">
           <MapContainer
-            center={[15.3173, 75.7139]}
-            zoom={7}
-            minZoom={6}
+            center={[22.5, 79.5]}
+            zoom={5}
+            minZoom={4}
             zoomControl={false}
             attributionControl={false}
             style={{ height: "100%", width: "100%" }}

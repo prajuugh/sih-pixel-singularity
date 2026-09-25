@@ -11,7 +11,6 @@ import {
   Send,
   Lock,
   Hash,
-  ArrowLeft,
   Copy,
   Check,
 } from "lucide-react";
@@ -50,7 +49,7 @@ const DURATION_PRESETS = [
   { label: "4 hrs", minutes: 240 },
 ];
 
-export default function RequestForm({ initialRequestId, onSubmit, step, onStepChange }) {
+export default function RequestForm({ initialRequestId, onSubmit }) {
   const { user } = useAuth();
 
   const resolveUserDepartment = () => {
@@ -111,12 +110,6 @@ export default function RequestForm({ initialRequestId, onSubmit, step, onStepCh
     };
   }, []);
 
-  useEffect(() => {
-    if (step === "details") {
-      document.getElementById("asset-type")?.focus();
-    }
-  }, [step]);
-
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
@@ -138,90 +131,152 @@ export default function RequestForm({ initialRequestId, onSubmit, step, onStepCh
     setForm((prev) => ({ ...prev, trackIds: [] }));
   };
 
-  const handleContinue = () => {
-    if (form.trackIds.length === 0) {
-      setMapError("Claim at least one track before specifying the work.");
-      return;
-    }
-    setMapError("");
-    onStepChange("details");
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (form.trackIds.length === 0) {
-      setMapError("Claim at least one track before specifying the work.");
-      onStepChange("map");
+      setMapError("Select at least one track before submitting — use the map or type a Track ID.");
       return;
     }
     setMapError("");
     onSubmit?.(form);
   };
+  const [showMapPicker, setShowMapPicker] = useState(false);
 
   return (
     <>
-      <div className={step === "map" ? "absolute inset-0" : "hidden"}>
-        <TrackPickerMap
-          selectedTrackIds={form.trackIds}
-          onToggleTrack={handleToggleTrack}
-          onClearAll={handleClearAllTracks}
-          onContinue={handleContinue}
-          continueError={mapError}
-          active={step === "map"}
-        />
-      </div>
+      {/* ──────────────────────────────────────────── */}
+      {/* FULL-SCREEN MAP PICKER (shown when checkbox active) */}
+      {/* ──────────────────────────────────────────── */}
+      {showMapPicker && (
+        <div className="absolute inset-0 z-20">
+          <TrackPickerMap
+            selectedTrackIds={form.trackIds}
+            onToggleTrack={handleToggleTrack}
+            onClearAll={handleClearAllTracks}
+            onContinue={() => { setShowMapPicker(false); setMapError(""); }}
+            continueError={mapError}
+            active={showMapPicker}
+          />
+        </div>
+      )}
 
-      {step === "details" && (
+      {/* ──────────────────────────────────────────── */}
+      {/* MAIN FORM                                     */}
+      {/* ──────────────────────────────────────────── */}
+      {!showMapPicker && (
         <form
           onSubmit={handleSubmit}
           className="max-w-3xl space-y-5 rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]"
         >
+          {/* ── Select Track from Map checkbox ── */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <input
+                id="use-map-picker"
+                type="checkbox"
+                checked={showMapPicker}
+                onChange={(e) => {
+                  setShowMapPicker(e.target.checked);
+                  setMapError("");
+                }}
+                className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#b83825]"
+              />
+              <label htmlFor="use-map-picker" className="cursor-pointer select-none">
+                <p className="text-sm font-semibold text-gray-900">Select Track from Live Map</p>
+                <p className="text-xs text-gray-500">Click the checkbox to open the map and visually pick track sections</p>
+              </label>
+            </div>
+            {form.trackIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {form.trackIds.map((tid) => (
+                  <span
+                    key={tid}
+                    className="rounded-md border border-blue-200 bg-white px-2 py-0.5 font-mono text-xs font-bold text-blue-900"
+                  >
+                    {tid}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {mapError && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">
+              {mapError}
+            </p>
+          )}
+
           <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#b83825]">
-                Step 2 of 2 · Specify the work
+                Maintenance Request
               </p>
               <h3 className="mt-1 text-lg font-semibold tracking-tight text-gray-950">
-                Corridor claimed. Describe the possession.
+                Describe the track possession
               </h3>
             </div>
-            <button
-              type="button"
-              onClick={() => onStepChange("map")}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#b83825] transition-[background-color,transform] duration-150 hover:bg-green-50 active:scale-[0.96]"
-            >
-              <ArrowLeft size={14} />
-              Back to map
-            </button>
           </div>
 
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
-                <MapPin size={16} className="text-[#b83825]" />
-                {form.trackIds.length === 1
-                  ? "1 track in possession"
-                  : `${form.trackIds.length} tracks in possession`}
+          {/* Track IDs: manual entry if no map selection */}
+          {form.trackIds.length === 0 && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3.5">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                <MapPin size={15} className="text-[#b83825]" />
+                Track ID(s) <span className="text-red-500">*</span>
+                <span className="text-xs font-normal text-gray-400 ml-1">— or use map above</span>
               </label>
-              <button
-                type="button"
-                onClick={() => onStepChange("map")}
-                className="text-xs font-semibold text-[#b83825] hover:underline"
-              >
-                Change corridor
-              </button>
+              <input
+                type="text"
+                placeholder="e.g. KA-T-000666, SEC-SBC-BNC (comma-separated)"
+                onBlur={(e) => {
+                  const ids = e.target.value.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+                  ids.forEach((id) => handleToggleTrack(id));
+                  e.target.value = "";
+                }}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#cf432c]"
+              />
+              <p className="mt-1.5 text-[11px] text-gray-400">Type IDs and press Tab/click away to add them, or use the map checkbox above.</p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {form.trackIds.map((tid) => (
-                <span
-                  key={tid}
-                  className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 font-mono text-xs font-bold text-emerald-900"
-                >
-                  {tid}
-                </span>
-              ))}
+          )}
+
+          {form.trackIds.length > 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+                  <MapPin size={16} className="text-[#b83825]" />
+                  {form.trackIds.length === 1
+                    ? "1 track selected"
+                    : `${form.trackIds.length} tracks selected`}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMapPicker(true)}
+                    className="text-xs font-semibold text-[#b83825] hover:underline"
+                  >
+                    Change via map
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearAllTracks}
+                    className="text-xs font-semibold text-gray-500 hover:text-red-600 hover:underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {form.trackIds.map((tid) => (
+                  <span
+                    key={tid}
+                    className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 font-mono text-xs font-bold text-emerald-900"
+                  >
+                    {tid}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Field label="Request Tracking ID" htmlFor="request-id" icon={Hash} subtitle="Copy this ID after you submit">

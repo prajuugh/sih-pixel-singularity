@@ -877,13 +877,15 @@ function generateRealWorldTrackSchedule(trackId, requestedDay = null) {
       ? (train.baseMinutes + transitMin) % 1440
       : (train.baseMinutes - transitMin + 2880) % 1440;
 
-    const dwellMin = train.type === "GOODS" ? 9 : (train.type.includes("VANDE") || train.type.includes("SHATABDI") ? 5 : 7);
-    const departureMin = (arrivalMin + dwellMin) % 1440;
+    const isElectric = train.traction
+      ? train.traction.toUpperCase().includes("ELEC")
+      : train.type !== "GOODS";
 
     rawSchedules.push({
       trainNo: train.trainNo,
       trainName: train.trainName,
       type: train.type,
+      traction: train.traction || (isElectric ? "25kV AC Electric" : "Diesel"),
       source: train.source,
       destination: train.destination,
       operatingDays: train.operatingDays,
@@ -914,6 +916,7 @@ function generateRealWorldTrackSchedule(trackId, requestedDay = null) {
       trainNo: "12627",
       trainName: "Karnataka Express",
       type: "SUPERFAST",
+      traction: "25kV AC Electric",
       source: "Bengaluru (SBC)",
       destination: "New Delhi (NDLS) via KLBG",
       operatingDays: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
@@ -933,6 +936,7 @@ function generateRealWorldTrackSchedule(trackId, requestedDay = null) {
       trainNo: "12628",
       trainName: "Karnataka Express (UP)",
       type: "SUPERFAST",
+      traction: "25kV AC Electric",
       source: "New Delhi (NDLS)",
       destination: "Bengaluru (SBC) via KLBG",
       operatingDays: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],

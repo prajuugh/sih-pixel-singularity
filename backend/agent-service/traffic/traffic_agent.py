@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import networkx as nx
+from traffic.mandatory_stations import mandatory_engine
 
 def time_to_minutes(time_str: str) -> int:
     if not time_str or not isinstance(time_str, str):
@@ -293,6 +294,15 @@ class TrafficAgent:
             if reroute else "No connected alternate railway path found"
         )
 
+        # Evaluate mandatory stations and scheduled commercial halts for conflicting passenger services
+        effective_blocked = list(blocked_track_ids) if blocked_track_ids else ([track_id] if track_id else [])
+        diversion_track_ids = reroute.get("trackIds", []) if reroute else []
+        mandatory_eval = mandatory_engine.evaluate_mandatory_halts(
+            conflicting_trains=conflicts,
+            blocked_track_ids=effective_blocked,
+            diversion_track_ids=diversion_track_ids,
+        )
+
         return {
             "trackId": track_id,
             "hasConflict": len(conflicts) > 0,
@@ -301,6 +311,7 @@ class TrafficAgent:
             "rerouteFeasible": reroute_feasible,
             "rerouteDetails": reroute_details,
             "reroute": reroute,
+            "mandatoryStationsEvaluation": mandatory_eval,
             "goodsForecastCount": 1 if any(t.get("type") == "GOODS" for t in scheduled_trains) else 0,
             "scheduleSource": self.last_schedule_source,
             "scheduleAuthoritative": self.last_schedule_authoritative,

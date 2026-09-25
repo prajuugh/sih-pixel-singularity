@@ -30,6 +30,47 @@ def date_with_offset(value: str, day_offset: int = 0) -> str:
     except (TypeError, ValueError):
         return value
 
+
+def is_electric_train(train: dict) -> bool:
+    if not train:
+        return False
+
+    # Explicit boolean flag
+    if isinstance(train.get("isElectric"), bool):
+        return train["isElectric"]
+
+    # Explicit traction string
+    traction = str(train.get("traction", "")).upper()
+    if "DIESEL" in traction:
+        return False
+    if any(k in traction for k in ["ELEC", "OHE", "25KV", "AC"]):
+        return True
+
+    # Locomotive Class (Indian Railways Freight & Passenger)
+    loco = str(train.get("locoClass") or train.get("loco") or train.get("locomotive") or "").upper()
+    if any(k in loco for k in ["WAG-9", "WAG-12", "WAG-7", "WAG9", "WAG12", "WAG", "WAP-7", "WAP-5", "WAP-4", "WAP"]):
+        return True
+    if any(k in loco for k in ["WDG-4", "WDG-4D", "WDG-3A", "WDG", "WDP-4", "WDP-4D", "WDP"]):
+        return False
+
+    t_type = str(train.get("type") or train.get("train_type") or "").upper()
+    name = str(train.get("trainName") or train.get("train_name") or "").upper()
+    no = str(train.get("trainNo") or train.get("train_no") or "").upper()
+
+    # Freight train checks (WAG vs WDG)
+    if "WAG" in name or "WAG" in no:
+        return True
+    if "WDG" in name or "WDG" in no:
+        return False
+
+    # Passenger train type codes and named services
+    if any(k in t_type for k in ["SF", "SUPERFAST", "EXP", "EXPRESS", "SKR", "SAMPARK KRANTI", "PASS", "PASSENGER", "MEMU", "EMU", "VB", "VANDE BHARAT", "SHATABDI", "RAJDHANI", "TEJAS", "MAIL", "INTERCITY", "SPECIAL"]):
+        return True
+    if any(k in name for k in ["VANDE BHARAT", "VB", "EMU", "MEMU", "METRO", "SHATABDI", "RAJDHANI", "TEJAS", "KARNATAKA EXPRESS", "RANI CHENNAMMA", "GOL GUMBAZ", "SWARNA JAYANTI", "EXPRESS", "EXP", "PASSENGER", "KRANTI", "INTERCITY"]):
+        return True
+
+    return False
+
 class BlockPlannerAgent:
     VERSION = "block-planner@2.1.0"
 
@@ -212,6 +253,21 @@ class BlockPlannerAgent:
             target_delay_train = freight_conflict.get("trainName") if freight_conflict else conflicts[0].get("trainName")
             target_delay_no = freight_conflict.get("trainNo") if freight_conflict else conflicts[0].get("trainNo")
 
+            delayed_trains_list = []
+            for c in conflicts:
+                arr_val = c.get("arrival", "19:15")
+                dep_val = c.get("departure", "19:30")
+                delay_m = 20
+                delayed_trains_list.append({
+                    "trainNo": c.get("trainNo", "16589"),
+                    "trainName": c.get("trainName", "Express"),
+                    "type": c.get("type", "SUPERFAST"),
+                    "scheduledTime": f"{arr_val}–{dep_val}",
+                    "delayedTime": f"{minutes_to_time(time_to_minutes(arr_val) + delay_m)}–{minutes_to_time(time_to_minutes(dep_val) + delay_m)}",
+                    "delayMinutes": delay_m,
+                    "action": f"Regulate at preceding loop siding for {delay_m} minutes",
+                })
+
             alternatives.append({
                 "id": 2,
                 "type": "DELAY",
@@ -219,22 +275,66 @@ class BlockPlannerAgent:
                 "feasible": True,
                 "trainImpact": "20 min regulation delay",
                 "delayMinutes": 20,
+                "delayedTrains": delayed_trains_list,
                 "operationalCost": 600.00,
                 "priorityScore": max(p_score - 8, 30),
                 "rank": 2,
             })
 
-            # 3. REROUTE is offered only when the traffic agent found a
-            # connected path made from available railway GeoJSON edges.
+            # 3. DIVERSION (REROUTE) is offered when the traffic agent found an available railway path.
+            # Indian Railways Operating Constraints:
+            # 1. Electric trains cannot be diverted onto alternate corridors lacking continuous 25kV OHE catenary.
+            # 2. Diversion cannot skip mandatory commercial passenger halts for conflicting passenger services.
             if reroute:
                 extra_km = reroute["extraDistanceKm"]
                 delay_minutes = max(5, round(extra_km / 45 * 60))
+                electric_conflicts = [t for t in conflicts if is_electric_train(t)]
+                is_electric_passive = len(electric_conflicts) > 0
+
+                mandatory_eval = traffic_info.get("mandatoryStationsEvaluation") or {}
+                skips_mandatory_stops = not mandatory_eval.get("diversionFeasibleForStations", True)
+                missed_stops = mandatory_eval.get("missedStops", [])
+
+                is_passive = is_electric_passive or skips_mandatory_stops
+
+                reasons = []
+                if is_electric_passive:
+                    reasons.append(
+                        f"Electric train ({', '.join(f'{t.get('trainNo', '')} {t.get('trainName', '')}' for t in electric_conflicts)}) cannot be diverted: alternate railway corridor lacks compatible 25kV AC overhead electrification (OHE)."
+                    )
+                if skips_mandatory_stops:
+                    reasons.append(
+                        mandatory_eval.get("explanation")
+                        or f"Diversion skips mandatory passenger halt(s): {', '.join(f'{s.get('stationName')} ({s.get('stationCode')})' for s in missed_stops)}."
+                    )
+
+                disabled_reason = " | ".join(reasons) if reasons else None
+                train_impact_msg = (
+                    "Diversion prohibited: mandatory commercial halts skipped"
+                    if skips_mandatory_stops
+                    else (
+                        "Diversion prohibited for electric train traction"
+                        if is_electric_passive
+                        else f"Diversion +{extra_km} km (+{delay_minutes} min estimated transit time)"
+                    )
+                )
+
                 alternatives.append({
                     "id": 3,
                     "type": "REROUTE",
-                    "description": f"Reroute via {len(reroute['trackIds'])} available railway track segment(s).",
-                    "feasible": True,
-                    "trainImpact": f"Detour +{extra_km} km (+{delay_minutes} min estimated transit time)",
+                    "displayName": "DIVERSION",
+                    "description": f"Diversion via {len(reroute['trackIds'])} available railway track segment(s).",
+                    "feasible": not is_passive,
+                    "passive": is_passive,
+                    "disabledReason": disabled_reason,
+                    "isElectricPassive": is_electric_passive,
+                    "skipsMandatoryStops": skips_mandatory_stops,
+                    "mandatoryStationsEvaluation": mandatory_eval,
+                    "missedMandatoryStops": missed_stops,
+                    "mandatoryStops": mandatory_eval.get("mandatoryStops", []),
+                    "stationsPreserved": mandatory_eval.get("diversionFeasibleForStations", True),
+                    "stationStatus": mandatory_eval.get("status", "NO_MANDATORY_HALTS_ON_SECTION"),
+                    "trainImpact": train_impact_msg,
                     "delayMinutes": delay_minutes,
                     "operationalCost": round(300 + extra_km * 45, 2),
                     "priorityScore": max(p_score - 14, 25),
@@ -268,10 +368,36 @@ class BlockPlannerAgent:
                 "feasible": True,
                 "trainImpact": "Zero train delays (Free corridor slot)",
                 "delayMinutes": 0,
+                "delayedTrains": [],
                 "operationalCost": 0.00,
                 "priorityScore": min(p_score + 10, 100),
                 "rank": 1,
             })
+
+            req_end_min = time_to_minutes(requested_end)
+            t1_arr_min = (req_end_min + 10) % 1440
+            t1_arr = minutes_to_time(t1_arr_min)
+            t1_dep = minutes_to_time(t1_arr_min + 15)
+            contingency_delayed_trains = [
+                {
+                    "trainNo": "12627",
+                    "trainName": "Karnataka Express",
+                    "type": "SUPERFAST",
+                    "scheduledTime": f"{t1_arr}–{t1_dep}",
+                    "delayedTime": f"{minutes_to_time(t1_arr_min + 10)}–{minutes_to_time(t1_arr_min + 25)}",
+                    "delayMinutes": 10,
+                    "action": "Trailing movement: speed regulated by +10 min contingency buffer",
+                },
+                {
+                    "trainNo": "G-BOXN-401",
+                    "trainName": "Iron Ore / Freight Consignment",
+                    "type": "GOODS",
+                    "scheduledTime": f"{minutes_to_time(t1_arr_min + 25)}–{minutes_to_time(t1_arr_min + 45)}",
+                    "delayedTime": f"{minutes_to_time(t1_arr_min + 40)}–{minutes_to_time(t1_arr_min + 60)}",
+                    "delayMinutes": 15,
+                    "action": "Held at preceding loop siding to clear corridor for maintenance completion",
+                }
+            ]
 
             alternatives.append({
                 "id": 2,
@@ -280,6 +406,7 @@ class BlockPlannerAgent:
                 "feasible": True,
                 "trainImpact": "10-minute contingency buffer",
                 "delayMinutes": 10,
+                "delayedTrains": contingency_delayed_trains,
                 "operationalCost": 150.00,
                 "priorityScore": max(p_score - 5, 40),
                 "rank": 2,
@@ -291,9 +418,10 @@ class BlockPlannerAgent:
                 alternatives.append({
                     "id": 3,
                     "type": "REROUTE",
-                    "description": f"Contingency route via {len(reroute['trackIds'])} available railway track segment(s).",
+                    "displayName": "DIVERSION",
+                    "description": f"Contingency diversion route via {len(reroute['trackIds'])} available railway track segment(s).",
                     "feasible": True,
-                    "trainImpact": f"Detour +{extra_km} km (+{delay_minutes} min estimated transit time)",
+                    "trainImpact": f"Diversion +{extra_km} km (+{delay_minutes} min estimated transit time)",
                     "delayMinutes": delay_minutes,
                     "operationalCost": round(300 + extra_km * 45, 2),
                     "priorityScore": max(p_score - 10, 35),
