@@ -153,18 +153,22 @@ async function createUser(req, res, next) {
 
     let createdUser = null;
     try {
-      const result = await query(
-        `INSERT INTO users (name, email, password_hash, role, department)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (email) DO UPDATE SET name = $1, role = $4, department = $5
-         RETURNING id, name, email, role, department`,
-        [userName, cleanEmail, hashedPassword, userRole, userDept]
-      );
-      if (result.rows && result.rows.length > 0) {
-        createdUser = result.rows[0];
+      const existing = await query("SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [cleanEmail]);
+      if (existing.rows && existing.rows.length > 0) {
+        const updateRes = await query(
+          "UPDATE users SET name = $1, password_hash = $2, role = $3, department = $4 WHERE id = $5 RETURNING id, name, email, role, department",
+          [userName, hashedPassword, userRole, userDept, existing.rows[0].id]
+        );
+        createdUser = updateRes.rows && updateRes.rows[0] ? updateRes.rows[0] : null;
+      } else {
+        const insertRes = await query(
+          "INSERT INTO users (name, email, password_hash, role, department) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, department",
+          [userName, cleanEmail, hashedPassword, userRole, userDept]
+        );
+        createdUser = insertRes.rows && insertRes.rows[0] ? insertRes.rows[0] : null;
       }
     } catch (dbErr) {
-      console.warn("DB insert error, saving to memory store:", dbErr.message);
+      console.warn("DB user insert error:", dbErr.message);
     }
 
     if (!createdUser) {

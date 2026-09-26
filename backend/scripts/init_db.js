@@ -68,13 +68,16 @@ async function initializeDatabase() {
   // Try DB queries to seed PostgreSQL if online
   try {
     for (const u of seedData.users) {
-      await query(
-        `INSERT INTO users (name, email, password_hash, role, department) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO NOTHING;`,
-        [u.name, u.email, u.password_hash, u.role, u.department]
-      );
+      const existing = await query("SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [u.email]).catch(() => null);
+      if (!existing || !existing.rows || existing.rows.length === 0) {
+        await query(
+          `INSERT INTO users (name, email, password_hash, role, department) VALUES ($1, $2, $3, $4, $5);`,
+          [u.name, u.email, u.password_hash, u.role, u.department]
+        ).catch((e) => console.warn("Seed user insert notice:", e.message));
+      }
     }
   } catch (err) {
-    // Handled by database fallback
+    console.warn("Seeding user notice:", err.message);
   }
 
   console.log("=== Seed Statistics ===");

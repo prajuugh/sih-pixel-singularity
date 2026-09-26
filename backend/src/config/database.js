@@ -118,9 +118,15 @@ async function query(text, params = []) {
         return res;
       }
     } catch (err) {
-      if (!useFallbackStore) {
-        console.warn(`PostgreSQL/Supabase pool connection attempt (${err.message}). Using active memory store.`);
-        useFallbackStore = true;
+      console.warn(`PostgreSQL query notice: ${err.message}`);
+      // Only switch to offline memory store if the database network connection failed
+      if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND" || err.code === "ETIMEDOUT") {
+        if (!useFallbackStore) {
+          console.warn(`PostgreSQL/Supabase connection failed (${err.message}). Using active memory store.`);
+          useFallbackStore = true;
+        }
+      } else {
+        throw err;
       }
     }
   }
