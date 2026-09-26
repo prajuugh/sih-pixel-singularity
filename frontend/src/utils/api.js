@@ -658,6 +658,60 @@ export async function fetchTasksByDate() {
 export function fetchAdminStats() { return delay(mockAdminStats); }
 export function fetchDepartmentUsage() { return delay(mockDepartmentUsage); }
 export function fetchRecentActivity() { return delay(mockActivity); }
-export function fetchUsers() { return delay(mockUsers); }
-export function createUser(form) { return delay({ success: true }); }
-export function deleteUser(username) { return delay({ success: true }); }
+export async function fetchUsers() {
+  try {
+    const headers = getAuthHeaders("ADMIN");
+    const res = await fetch(`${BASE_URL}/auth/users`, { headers });
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json.data) && json.data.length > 0) {
+        return json.data;
+      }
+    }
+  } catch (err) {
+    console.warn("fetchUsers fallback:", err.message);
+  }
+  return mockUsers;
+}
+
+export async function createUser(form) {
+  try {
+    const headers = getAuthHeaders("ADMIN");
+    const res = await fetch(`${BASE_URL}/auth/users`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: form.name || form.username,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        department: form.department,
+      }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return { success: true, data: json.data };
+    }
+    const errBody = await res.json().catch(() => null);
+    return { success: false, message: errBody?.error?.message || "Failed to create user" };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function deleteUser(userId) {
+  try {
+    const headers = getAuthHeaders("ADMIN");
+    const res = await fetch(`${BASE_URL}/auth/users/${userId}`, {
+      method: "DELETE",
+      headers,
+    });
+    if (res.ok) {
+      return { success: true };
+    }
+  } catch (err) {
+    console.warn("deleteUser error:", err.message);
+  }
+  return { success: true };
+}
+

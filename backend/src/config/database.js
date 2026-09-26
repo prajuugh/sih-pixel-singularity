@@ -17,7 +17,7 @@ const {
 } = process.env;
 const LOCAL_STORE_ONLY = process.env.LOCAL_STORE_ONLY === "true";
 
-// Initialize Supabase Client SDK if SUPABASE_URL and a key are provided
+// Initialize Supabase Client SDK safely if configured
 let supabase = null;
 const supabaseKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 if (
@@ -26,8 +26,12 @@ if (
   SUPABASE_URL !== "https://your-project-ref.supabase.co" &&
   supabaseKey
 ) {
-  supabase = createClient(SUPABASE_URL, supabaseKey);
-  console.log(`⚡ Supabase Client initialized with endpoint: ${SUPABASE_URL}`);
+  try {
+    supabase = createClient(SUPABASE_URL, supabaseKey, { auth: { persistSession: false } });
+    console.log(`⚡ Supabase Client initialized with endpoint: ${SUPABASE_URL}`);
+  } catch (err) {
+    console.warn("Supabase JS SDK init skipped (using direct PostgreSQL pg pool):", err.message);
+  }
 }
 
 // PostgreSQL / Supabase Connection Pool configuration

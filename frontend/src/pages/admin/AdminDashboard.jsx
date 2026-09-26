@@ -14,6 +14,7 @@ import {
 import Button from "../../components/common/Button";
 import Modal from "../../components/common/Modal";
 import Navbar from "../../components/common/Navbar";
+import { fetchUsers, createUser, deleteUser } from "../../utils/api";
 
 const initialUsers = [
   { id: 1, username: "admin", email: "admin@rbps.com", role: "Admin", department: "—" },
@@ -83,7 +84,18 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState("");
 
-  // Persist users
+  // Load users from API/Supabase on mount
+  useEffect(() => {
+    fetchUsers()
+      .then((apiUsers) => {
+        if (Array.isArray(apiUsers) && apiUsers.length > 0) {
+          setUsers(apiUsers);
+        }
+      })
+      .catch((err) => console.warn("Could not fetch users from backend:", err));
+  }, []);
+
+  // Persist users locally as backup cache
   useEffect(() => {
     try {
       localStorage.setItem("rbps_admin_users", JSON.stringify(users));
@@ -114,7 +126,7 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.password || !form.role) {
       setError("Name, email, password, and role are required.");
@@ -154,18 +166,34 @@ export default function AdminDashboard() {
       return;
     }
 
-    const newUser = {
-      id: users.length ? Math.max(...users.map((u) => u.id || 0)) + 1 : 1,
+    const payload = {
+      name: form.name.trim(),
       username: candidateUsername,
       email: form.email.trim(),
       password: form.password.trim(),
       role: form.role === "Team" ? "Teams" : "Officer",
       department: form.role === "Team" ? form.department : "—",
     };
-    setUsers((prev) => [...prev, newUser]);
+
+    const optimisticUser = {
+      id: users.length ? Math.max(...users.map((u) => u.id || 0)) + 1 : 1,
+      ...payload,
+    };
+    setUsers((prev) => [...prev, optimisticUser]);
     setForm({ name: "", email: "", password: "", role: "", department: "" });
     setError("");
     setShowModal(false);
+
+    try {
+      const res = await createUser(payload);
+      if (res?.success && res?.data) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === optimisticUser.id ? { ...u, ...res.data } : u))
+        );
+      }
+    } catch (err) {
+      console.warn("User created locally, sync warning:", err);
+    }
   };
 
   const handleStartEdit = (user) => {
@@ -262,12 +290,19 @@ export default function AdminDashboard() {
     setShowDeleteModal(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget || deleteTarget.username === "admin") return;
-    setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+    const targetId = deleteTarget.id;
+    setUsers((prev) => prev.filter((u) => u.id !== targetId));
     setShowDeleteModal(false);
     setDeleteTarget(null);
     setDeleteError("");
+
+    try {
+      await deleteUser(targetId);
+    } catch (err) {
+      console.warn("Delete user sync warning:", err);
+    }
   };
 
   return (

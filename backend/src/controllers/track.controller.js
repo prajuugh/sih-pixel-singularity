@@ -24,14 +24,7 @@ try {
   console.warn("⚠️  Could not load karnataka_tracks.geojson:", err.message);
 }
 
-try {
-  if (fs.existsSync(indiaTracksPath)) {
-    indiaFeatureCollection = JSON.parse(fs.readFileSync(indiaTracksPath, "utf8"));
-    console.log(`✅ Loaded ${indiaFeatureCollection.features.length} Pan-India railway track sections`);
-  }
-} catch (err) {
-  console.warn("⚠️  Could not load india_railways_network.geojson:", err.message);
-}
+// Lazy loaded on demand to conserve RAM on t3.micro/low-memory environments
 
 function getIndiaTracks() {
   if (!indiaFeatureCollection) {
