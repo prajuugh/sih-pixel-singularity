@@ -12,7 +12,7 @@ export default function Table({ columns, rows, rowKey = "id", emptyMessage = "No
         <thead className="bg-gray-50/80">
           <tr className="border-b border-gray-100 text-gray-500">
             {columns.map((col) => (
-              <th key={col.key} className="px-3 py-2.5 font-semibold">
+              <th key={col.key} className={`px-3 py-2.5 font-semibold ${col.className || ""}`}>
                 {col.header}
               </th>
             ))}
@@ -32,7 +32,7 @@ export default function Table({ columns, rows, rowKey = "id", emptyMessage = "No
                 className="border-b border-gray-100 transition-colors duration-150 last:border-0 hover:bg-gray-50/70"
               >
                 {columns.map((col) => (
-                  <td key={col.key} className="px-3 py-3 text-gray-700">
+                  <td key={col.key} className={`px-3 py-3 text-gray-700 ${col.className || ""}`}>
                     {col.render ? col.render(row, i) : row[col.key]}
                   </td>
                 ))}

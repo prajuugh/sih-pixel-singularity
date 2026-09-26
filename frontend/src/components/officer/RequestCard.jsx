@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Ban, CheckCircle2, ChevronDown, ChevronUp, Clock3, GitCompare, MapPin, Package, Route, ShieldAlert, SlidersHorizontal, Sparkles, TrainFront, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Ban, Camera, CheckCircle2, ChevronDown, ChevronUp, Clock3, Eye, GitCompare, MapPin, Package, Route, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, TrainFront, Users } from "lucide-react";
 import { requestStatusStyles } from "../../utils/constants";
 import Modal from "../common/Modal";
 import AgentDecisionTrace from "../common/AgentDecisionTrace";
@@ -25,10 +25,12 @@ function computeRevisedPreview(start, end, duration = 90) {
   return { startTime: toTime(endMinutes + 15), endTime: toTime(endMinutes + 15 + duration) };
 }
 
-export default function RequestCard({ request, onApprove, onDecline, onRevision }) {
+export default function RequestCard({ request, onApprove, onDecline, onRevision, onVerifyCompleted }) {
   const [showDetails, setShowDetails] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [decisionType, setDecisionType] = useState("APPROVED");
   const [selectedAltId, setSelectedAltId] = useState(null);
   const [feedback, setFeedback] = useState("");
@@ -209,13 +211,52 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
   const tracePlan = { ...request.agentPlan, trackId: request.raw?.track_id || request.agentPlan?.trackId, priorityScore, conflict: hasConflict, conflictingTrains, recommendedBlock, alternatives };
 
+  const completionProof = request.completionProof || request.raw?.completion_proof;
+  const isWorkCompleted = Boolean(
+    completionProof ||
+    ["COMPLETED", "WORK_COMPLETED", "Completed"].includes(request.status) ||
+    ["COMPLETED", "WORK_COMPLETED", "Completed"].includes(request.raw?.status)
+  );
+  const isVerifiedWork = Boolean(
+    completionProof?.verified_by_officer ||
+    request.status === "VERIFIED" ||
+    request.raw?.status === "VERIFIED"
+  );
+
+  const handleVerifyWork = async () => {
+    setVerifying(true);
+    try {
+      const note = feedback.trim() || "Field work completion inspected, photographic evidence verified, and track certified safe for normal traffic operations.";
+      if (onVerifyCompleted) {
+        await onVerifyCompleted(request, note);
+      } else if (onApprove) {
+        await onApprove(request, note, "VERIFIED");
+      }
+      setShowProofModal(false);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   return (
     <article className="overflow-hidden rounded-xl border border-[#d9e1e5] bg-white shadow-sm shadow-slate-900/[0.03]">
       <div className="p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-[#60717d]">
-              <span className={`rounded-full px-2.5 py-1 font-semibold ${requestStatusStyles[request.status] || "bg-blue-100 text-blue-800"}`}>{request.status}</span>
+              {isVerifiedWork ? (
+                <span className="rounded-full px-2.5 py-1 font-semibold bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
+                  <ShieldCheck size={13} /> Verified & Restored
+                </span>
+              ) : isWorkCompleted ? (
+                <span className="rounded-full px-2.5 py-1 font-semibold bg-teal-100 text-teal-800 inline-flex items-center gap-1">
+                  <Camera size={13} /> Work Completed · Verification Pending
+                </span>
+              ) : (
+                <span className={`rounded-full px-2.5 py-1 font-semibold ${requestStatusStyles[request.status] || "bg-blue-100 text-blue-800"}`}>
+                  {request.status}
+                </span>
+              )}
               <span>{request.department}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono text-xs">{request.id}</span>
@@ -243,7 +284,111 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
           <div className="flex shrink-0 items-center justify-between gap-5 rounded-lg bg-[#f5f7f8] px-4 py-3 sm:block sm:text-right"><span className="text-sm font-medium text-[#687984] sm:block">Priority</span><span className={`text-2xl font-semibold ${scoreTone}`}>{priorityScore ?? "—"}<span className="text-sm font-normal text-slate-500">/100</span></span></div>
         </div>
 
-        <div className={`mt-4 flex items-start gap-3 rounded-lg border p-3.5 ${state.box} ${state.text}`}><StateIcon size={20} className="mt-0.5 shrink-0" aria-hidden="true" /><div><p className="font-semibold">{state.label}</p><p className="mt-0.5 text-sm leading-5 opacity-80">{state.detail}</p></div></div>
+        {isWorkCompleted ? (
+          <div className={`mt-4 flex items-start gap-3 rounded-lg border p-3.5 ${isVerifiedWork ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-teal-200 bg-teal-50 text-teal-950"}`}>
+            <Camera size={20} className={`mt-0.5 shrink-0 ${isVerifiedWork ? "text-emerald-700" : "text-teal-700"}`} aria-hidden="true" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="font-semibold">
+                  {isVerifiedWork ? "Work Completion Verified & Track Certified Safe" : "Field Work Completed · Clearance Proof Submitted"}
+                </p>
+                <span className="text-xs font-mono text-teal-800">
+                  {completionProof?.completed_at ? new Date(completionProof.completed_at).toLocaleString("en-IN") : ""}
+                </span>
+              </div>
+              <p className="mt-0.5 text-sm leading-5 opacity-90">
+                {isVerifiedWork
+                  ? "Officer has certified line restoration. Safety clearance and track restoration logged in permanent audit trail."
+                  : "Engineering maintenance crew marked block completed and submitted site photographic evidence for officer restoration sign-off."}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className={`mt-4 flex items-start gap-3 rounded-lg border p-3.5 ${state.box} ${state.text}`}>
+            <StateIcon size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <div><p className="font-semibold">{state.label}</p><p className="mt-0.5 text-sm leading-5 opacity-80">{state.detail}</p></div>
+          </div>
+        )}
+
+        {/* Field Work Completion Evidence Showcase */}
+        {isWorkCompleted && completionProof && (
+          <div className="mt-4 rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50/70 via-emerald-50/50 to-white p-4 shadow-2xs">
+            <div className="flex items-center justify-between gap-2 flex-wrap border-b border-teal-200/70 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Camera size={18} className="text-teal-700" />
+                <h4 className="font-semibold text-sm text-teal-950">Field Work Completion & Site Clearance Evidence</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                {isVerifiedWork ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                    <ShieldCheck size={13} /> Line Certified Restored
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                    Verification Pending
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-col sm:flex-row items-start gap-4">
+              {completionProof.photo ? (
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(true)}
+                  className="group relative cursor-pointer overflow-hidden rounded-lg border-2 border-teal-300/80 shadow-sm shrink-0 w-full sm:w-48 h-32 bg-slate-900 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  title="Click to inspect high-resolution site photo"
+                >
+                  <img
+                    src={completionProof.photo}
+                    alt="Site work completion evidence"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-xs">
+                    <Eye size={16} /> Inspect Photo
+                  </div>
+                  <span className="absolute bottom-1 right-1 bg-black/70 backdrop-blur-xs text-[10px] text-white px-1.5 py-0.5 rounded font-mono">
+                    Full view
+                  </span>
+                </button>
+              ) : (
+                <div className="w-full sm:w-48 h-32 rounded-lg border border-dashed border-teal-300 bg-teal-50/50 flex flex-col items-center justify-center text-xs text-teal-800">
+                  <Camera size={24} className="opacity-40 mb-1" />
+                  No site photo attached
+                </div>
+              )}
+
+              <div className="flex-1 space-y-2.5 text-xs w-full">
+                <div>
+                  <span className="text-teal-900 font-bold block uppercase tracking-wider text-[10px]">
+                    Field Clearance Declaration & Notes
+                  </span>
+                  <p className="mt-1 text-slate-800 bg-white/90 p-2.5 rounded-lg border border-teal-200/80 leading-relaxed font-sans text-xs italic">
+                    "{completionProof.notes || "All engineering maintenance work finished. Track cleared of all personnel, tools, and temporary speed restrictions lifted."}"
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 bg-white/60 p-2 rounded-lg border border-teal-100">
+                  <div>
+                    <span className="text-slate-500">Completed by:</span>{" "}
+                    <strong className="text-slate-900">{completionProof.completed_by || request.department || "Field Team"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Submitted at:</span>{" "}
+                    <strong className="text-slate-900">
+                      {completionProof.completed_at ? new Date(completionProof.completed_at).toLocaleString("en-IN") : "Recorded"}
+                    </strong>
+                  </div>
+                  {completionProof.photo_name && (
+                    <div className="sm:col-span-2 text-slate-500">
+                      <span>Attachment:</span> <code className="text-slate-700 bg-slate-100 px-1 py-0.5 rounded text-[10px]">{completionProof.photo_name}</code>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-4">
           <div className="rounded-lg border border-[#cce2d5] bg-[#f2faf5] p-3.5">
             <p className="text-sm font-medium text-emerald-800">Recommended window</p>
@@ -253,7 +398,40 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
 
         <div className="mt-4 flex flex-col-reverse gap-2 border-t border-[#edf0f1] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" onClick={() => setShowDetails((open) => !open)} aria-expanded={showDetails} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] ${focusRing}`}>{showDetails ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}{showDetails ? "Hide evidence" : "View evidence and agent explanation"}</button>
-          <div className="grid grid-cols-3 gap-2 sm:flex"><button type="button" onClick={() => openReview("REJECTED")} className={`min-h-11 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 hover:bg-red-50 ${focusRing}`}>Decline</button><button type="button" onClick={() => openReview("REVISION_REQUIRED")} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100 ${focusRing}`}><SlidersHorizontal size={16} aria-hidden="true" />Modify</button><button type="button" onClick={() => openReview("APPROVED")} disabled={!isVerifiedPlan || alternatives.length === 0} title={!isVerifiedPlan ? "Verification must pass before approval" : undefined} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white ${focusRing} ${isVerifiedPlan && alternatives.length ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}><CheckCircle2 size={16} aria-hidden="true" />Approve</button></div>
+          
+          {isWorkCompleted ? (
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              {completionProof?.photo && (
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(true)}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-3.5 text-sm font-semibold text-teal-900 hover:bg-teal-100 ${focusRing}`}
+                >
+                  <Eye size={16} /> Inspect Photo Proof
+                </button>
+              )}
+              {!isVerifiedWork ? (
+                <button
+                  type="button"
+                  disabled={verifying}
+                  onClick={handleVerifyWork}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 text-sm font-semibold text-white shadow-xs ${focusRing}`}
+                >
+                  <ShieldCheck size={17} /> {verifying ? "Verifying..." : "Verify & Certify Track Clear"}
+                </button>
+              ) : (
+                <div className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-300 px-3.5 text-sm font-semibold text-emerald-800">
+                  <CheckCircle2 size={16} className="text-emerald-600" /> Track Safe & Restored
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 sm:flex">
+              <button type="button" onClick={() => openReview("REJECTED")} className={`min-h-11 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 hover:bg-red-50 ${focusRing}`}>Decline</button>
+              <button type="button" onClick={() => openReview("REVISION_REQUIRED")} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100 ${focusRing}`}><SlidersHorizontal size={16} aria-hidden="true" />Modify</button>
+              <button type="button" onClick={() => openReview("APPROVED")} disabled={!isVerifiedPlan || alternatives.length === 0} title={!isVerifiedPlan ? "Verification must pass before approval" : undefined} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white ${focusRing} ${isVerifiedPlan && alternatives.length ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}><CheckCircle2 size={16} aria-hidden="true" />Approve</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -679,9 +857,75 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision 
           )}
           {decisionType === "REJECTED" && <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900"><Ban size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>This closes the request. Give the requesting team a clear reason below.</span></div>}
           <label htmlFor={`${request.id}-feedback`} className="mt-5 block text-sm font-semibold text-[#263a47]">Reason or instructions</label><textarea id={`${request.id}-feedback`} rows={4} value={feedback} onChange={(event) => { setFeedback(event.target.value); setFormError(""); }} placeholder={decisionType === "REJECTED" ? "Explain why this request cannot proceed…" : "Add instructions for the maintenance and control teams…"} className={`mt-1 w-full rounded-lg border border-[#bfcbd1] p-3 text-base leading-6 ${focusRing}`} aria-describedby={formError ? `${request.id}-form-error` : undefined} required />{formError && <p id={`${request.id}-form-error`} role="alert" className="mt-2 flex items-center gap-2 text-sm font-medium text-red-700"><AlertTriangle size={16} aria-hidden="true" />{formError}</p>}
-          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowReviewModal(false)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-[#526570] hover:bg-[#f0f4f5] ${focusRing}`}>Cancel</button><button type="submit" disabled={decisionType === "APPROVED" && (!selectedAltId || !isVerifiedPlan)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white ${focusRing} ${decisionType === "REVISION_REQUIRED" ? "bg-amber-700 hover:bg-amber-800" : decisionType === "REJECTED" ? "bg-red-700 hover:bg-red-800" : selectedAltId && isVerifiedPlan ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}>{decisionType === "APPROVED" ? <CheckCircle2 size={17} aria-hidden="true" /> : decisionType === "REVISION_REQUIRED" ? <Route size={17} aria-hidden="true" /> : <Ban size={17} aria-hidden="true" />}{decisionType === "APPROVED" ? `Approve ${formatOptionType(selectedAlternative?.type, selectedAlternative?.rank || 1) || "selected option"}` : decisionType === "REVISION_REQUIRED" ? "Generate revised plan" : "Confirm decline"}</button></div>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => setShowReviewModal(false)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-[#526570] hover:bg-[#f0f4f5] ${focusRing}`}>Cancel</button>
+            <button type="submit" disabled={decisionType === "APPROVED" && (!selectedAltId || !isVerifiedPlan)} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white ${focusRing} ${decisionType === "REVISION_REQUIRED" ? "bg-amber-700 hover:bg-amber-800" : decisionType === "REJECTED" ? "bg-red-700 hover:bg-red-800" : selectedAltId && isVerifiedPlan ? "bg-[#315b75] hover:bg-[#25485e]" : "cursor-not-allowed bg-slate-300"}`}>
+              {decisionType === "APPROVED" ? <CheckCircle2 size={17} aria-hidden="true" /> : decisionType === "REVISION_REQUIRED" ? <Route size={17} aria-hidden="true" /> : <Ban size={17} aria-hidden="true" />}
+              {decisionType === "APPROVED" ? `Approve ${formatOptionType(selectedAlternative?.type, selectedAlternative?.rank || 1) || "selected option"}` : decisionType === "REVISION_REQUIRED" ? "Generate revised plan" : "Confirm decline"}
+            </button>
+          </div>
         </form>
       </Modal>}
+
+      {showProofModal && completionProof && (
+        <Modal
+          title={`Field Work Completion Evidence — ${request.id}`}
+          onClose={() => setShowProofModal(false)}
+          maxWidth="max-w-2xl"
+        >
+          <div className="space-y-4">
+            {completionProof.photo ? (
+              <div className="relative overflow-hidden rounded-xl border border-slate-300 bg-black flex items-center justify-center max-h-[460px]">
+                <img
+                  src={completionProof.photo}
+                  alt="Field work photographic evidence"
+                  className="w-full max-h-[460px] object-contain"
+                />
+              </div>
+            ) : (
+              <div className="py-12 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                No photo preview available for this submission.
+              </div>
+            )}
+
+            <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-teal-950 font-semibold">
+                <span>Submitted by {completionProof.completed_by || "Engineering Crew"}</span>
+                <span className="font-mono text-[11px] text-teal-800">
+                  {completionProof.completed_at ? new Date(completionProof.completed_at).toLocaleString("en-IN") : ""}
+                </span>
+              </div>
+              <p className="text-slate-800 bg-white p-2.5 rounded-lg border border-teal-100 italic leading-relaxed text-xs">
+                "{completionProof.notes || "Block completed and track handed back safe for traffic."}"
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowProofModal(false)}
+                className={`min-h-11 rounded-lg px-4 text-sm font-semibold text-slate-600 hover:bg-slate-100 ${focusRing}`}
+              >
+                Close
+              </button>
+              {!isVerifiedWork ? (
+                <button
+                  type="button"
+                  disabled={verifying}
+                  onClick={handleVerifyWork}
+                  className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-5 text-sm font-semibold text-white ${focusRing}`}
+                >
+                  <ShieldCheck size={17} /> {verifying ? "Certifying..." : "Verify & Certify Track Clear"}
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-800">
+                  <CheckCircle2 size={16} /> Certified Safe for Traffic
+                </span>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
     </article>
   );
 }

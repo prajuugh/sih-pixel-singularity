@@ -7,7 +7,7 @@ export default function ProtectedRoute({ allowedRole, children }) {
   if (!user) return <Navigate to="/login" replace />;
 
   const allowed = Array.isArray(allowedRole) ? allowedRole : [allowedRole];
-  if (!allowed.includes(user.role)) return <Navigate to="/login" replace />;
+  if (!allowed.includes(user.role) && user.role !== "admin") return <Navigate to="/login" replace />;
 
   return children;
 }

@@ -205,7 +205,9 @@ async function createRequest(userId, payload) {
 }
 
 async function reviewRequest(requestId, officerId, decision, feedback, alternativeId = null, prohibitedWindow = null, newWindow = null) {
-  const req = fallbackStore.maintenance_requests.find((r) => r.request_id === requestId);
+  const req = fallbackStore.maintenance_requests.find(
+    (r) => r.request_id === requestId || String(r.id) === String(requestId)
+  );
   if (!req) {
     throw { statusCode: 404, code: "REQUEST_NOT_FOUND", message: `Request ${requestId} not found` };
   }

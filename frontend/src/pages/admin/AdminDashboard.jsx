@@ -17,11 +17,6 @@ import Navbar from "../../components/common/Navbar";
 
 const initialUsers = [
   { id: 1, username: "admin", email: "admin@rbps.com", role: "Admin", department: "—" },
-  { id: 2, username: "officer1", email: "officer.sharma@rbps.com", role: "Officer", department: "—" },
-  { id: 3, username: "eng_team", email: "engineering@rbps.com", role: "Teams", department: "Engineering" },
-  { id: 4, username: "snt_team", email: "signaltelecom@rbps.com", role: "Teams", department: "Signal & Telecom" },
-  { id: 5, username: "trd_team", email: "traction@rbps.com", role: "Teams", department: "Traction" },
-  { id: 6, username: "control1", email: "control@rbps.com", role: "Officer", department: "Control" },
 ];
 
 const roleBadgeStyles = {
@@ -40,19 +35,20 @@ export default function AdminDashboard() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const testUsernames = new Set(["officer1", "eng_team", "snt_team", "trd_team", "control1"]);
           const seenUsernames = new Set();
           const seenEmails = new Set();
           const deduplicated = [];
           for (const u of parsed) {
             const uName = (u.username || "").trim().toLowerCase();
             const uEmail = (u.email || "").trim().toLowerCase();
-            if (!seenUsernames.has(uName) && !seenEmails.has(uEmail)) {
+            if (!testUsernames.has(uName) && !seenUsernames.has(uName) && !seenEmails.has(uEmail)) {
               if (uName) seenUsernames.add(uName);
               if (uEmail) seenEmails.add(uEmail);
               deduplicated.push(u);
             }
           }
-          return deduplicated;
+          if (deduplicated.length > 0) return deduplicated;
         }
       }
     } catch (e) {

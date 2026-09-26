@@ -4,18 +4,9 @@ const bcrypt = require("bcryptjs");
 async function generateSeedData(tracksCount = 5461) {
   // 1. Password hashes
   const adminHash = await bcrypt.hash("admin123", 10);
-  const officerHash = await bcrypt.hash("officer123", 10);
-  const engHash = await bcrypt.hash("eng123", 10);
-  const sntHash = await bcrypt.hash("snt123", 10);
-  const trdHash = await bcrypt.hash("trd123", 10);
 
   const users = [
     { id: 1, username: "admin", name: "System Admin", email: "admin@rbps.com", password_hash: adminHash, role: "ADMIN", department: null },
-    { id: 2, username: "officer1", name: "Officer Sharma", email: "officer.sharma@rbps.com", password_hash: officerHash, role: "OFFICER", department: "Control" },
-    { id: 3, username: "officer2", name: "Officer Patil", email: "officer.patil@rbps.com", password_hash: officerHash, role: "OFFICER", department: "Control" },
-    { id: 4, username: "eng_team", name: "Engineering Team Lead", email: "engineering@rbps.com", password_hash: engHash, role: "TEAMS", department: "Engineering" },
-    { id: 5, username: "snt_team", name: "Signal & Telecom Team", email: "signaltelecom@rbps.com", password_hash: sntHash, role: "TEAMS", department: "Signal & Telecom" },
-    { id: 6, username: "trd_team", name: "Traction Distribution Team", email: "traction@rbps.com", password_hash: trdHash, role: "TEAMS", department: "Traction Distribution" },
   ];
 
   // 2. Corridors (10 major Karnataka corridors)
@@ -72,36 +63,8 @@ async function generateSeedData(tracksCount = 5461) {
     "Point Machine Inspection", "Signal Cable Replacement", "Track Circuit Testing", "Axle Counter Maintenance"
   ];
 
+  // 4. Maintenance Tasks (Clean start - 0 test tasks)
   const maintenanceTasks = [];
-  for (let i = 1; i <= 250; i++) {
-    const sourceSystem = sourceSystems[i % sourceSystems.length];
-    const dept = sourceSystem === "TMS" ? "Engineering" : sourceSystem === "TDMS" ? "Traction Distribution" : "Signal & Telecom";
-    const assetType = sourceSystem === "TMS" ? "TRACK" : sourceSystem === "TDMS" ? "OHE" : "SIGNAL";
-    const trackNum = ((i * 19) % tracksCount) + 1;
-    const trackId = `KA-T-${String(trackNum).padStart(6, "0")}`;
-    const taskType = taskTypes[i % taskTypes.length];
-
-    const dayOffset = (i % 20);
-    const dueDate = new Date(2026, 8, 10 + dayOffset).toISOString().split("T")[0];
-
-    maintenanceTasks.push({
-      task_id: `${sourceSystem}-2026-${String(i).padStart(5, "0")}`,
-      source_system: sourceSystem,
-      department: dept,
-      asset_type: assetType,
-      track_id: trackId,
-      task_type: taskType,
-      description: `Preventive and corrective ${taskType} on segment ${trackId}`,
-      criticality: 45 + ((i * 13) % 55),
-      urgency: 40 + ((i * 7) % 60),
-      failure_probability: 20 + ((i * 19) % 75),
-      overdue_days: (i % 7 === 0) ? 12 : 0,
-      due_date: dueDate,
-      estimated_duration_minutes: 60 + ((i * 15) % 180), // 60-240 min
-      required_block: true,
-      status: i % 10 === 0 ? "COMPLETED" : i % 5 === 0 ? "SCHEDULED" : "PENDING",
-    });
-  }
 
   // 5. Maintenance Requests (Cleared - ready for fresh operational planning)
   const maintenanceRequests = [];

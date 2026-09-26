@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Train, User, ChevronDown, LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
@@ -22,6 +22,18 @@ export default function Navbar() {
   const [showProfile, setShowProfile] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
   const handleLogout = () => {
     logout();
@@ -30,7 +42,7 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="relative z-20 flex min-h-16 items-center justify-between gap-3 border-b border-[#e3e5e4] bg-white px-4 py-2.5 text-[#171918] sm:px-6 md:px-8">
+      <header className="relative z-[9999] flex min-h-16 items-center justify-between gap-3 border-b border-[#e3e5e4] bg-white px-4 py-2.5 text-[#171918] sm:px-6 md:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#171918] text-white">
             <Train size={19} strokeWidth={2} />
@@ -53,7 +65,7 @@ export default function Navbar() {
             <p>{APP_TAGLINE_2}</p>
           </div>
 
-          <div className="relative">
+          <div ref={menuRef} className="relative">
             <button
               onClick={() => setMenuOpen((o) => !o)}
               aria-label="Open user menu"
@@ -72,7 +84,7 @@ export default function Navbar() {
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 z-10 mt-3 w-44 overflow-hidden rounded-xl bg-white p-1 text-gray-700 shadow-[0_16px_40px_rgb(0_0_0/0.14)] ring-1 ring-black/10">
+              <div className="absolute right-0 top-full z-[10000] mt-1.5 w-48 overflow-hidden rounded-xl bg-white p-1 text-gray-700 shadow-2xl ring-1 ring-black/10">
                 <button
                   onClick={() => {
                     setShowProfile(true);

@@ -1,25 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, FileCheck, Package, RefreshCw, RotateCcw, TrainFront, Users } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AlertTriangle, Camera, CheckCircle2, ClipboardCheck, FileCheck, RefreshCw, RotateCcw } from "lucide-react";
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import RequestCard from "../../components/officer/RequestCard";
 import { fetchRequests, updateRequestStatus } from "../../utils/api";
-import { getRequestTrafficType } from "../../utils/trafficClassification";
 
 const FILTERS = [
   { value: "ALL", label: "All", icon: ClipboardCheck },
   { value: "READY", label: "Ready", icon: CheckCircle2 },
   { value: "CONFLICT", label: "Conflicts", icon: AlertTriangle },
   { value: "REVISION", label: "Revised", icon: RotateCcw },
+  { value: "COMPLETED", label: "Completed Work", icon: Camera },
 ];
 
 export default function OfficerRequests() {
+  const [searchParams] = useSearchParams();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [queueFilter, setQueueFilter] = useState("ALL");
-  const [trafficFilter, setTrafficFilter] = useState("ALL");
+  const [queueFilter, setQueueFilter] = useState(() => {
+    const f = searchParams.get("filter");
+    return f ? f.toUpperCase() : "ALL";
+  });
+
+  useEffect(() => {
+    const f = searchParams.get("filter");
+    if (f) {
+      setQueueFilter(f.toUpperCase());
+    }
+  }, [searchParams]);
 
   const loadRequests = async () => {
     setLoading(true);
@@ -58,8 +68,24 @@ export default function OfficerRequests() {
     };
   }, []);
 
+  const isCompletedWork = (r) => {
+    const rawStatus = (r.raw?.status || r.status || "").toUpperCase();
+    return (
+      rawStatus === "COMPLETED" ||
+      rawStatus === "WORK_COMPLETED" ||
+      r.status === "Completed" ||
+      Boolean(r.completionProof || r.raw?.completion_proof)
+    );
+  };
+
   const handleDecision = async (request, decisionType, feedback, alternativeId = null, prohibitedWindow = null, newWindow = null) => {
-    const statusMap = { APPROVED: "Approved", REVISION_REQUIRED: "AI Processing", REJECTED: "Declined" };
+    const statusMap = {
+      APPROVED: "Approved",
+      REVISION_REQUIRED: "AI Processing",
+      REJECTED: "Declined",
+      VERIFIED: "Completed",
+      VERIFY_COMPLETED: "Completed",
+    };
     const newStatus = statusMap[decisionType] || decisionType;
     const result = await updateRequestStatus(request.id, newStatus, decisionType, feedback, alternativeId, prohibitedWindow, newWindow);
 
@@ -76,6 +102,7 @@ export default function OfficerRequests() {
         recommendedBlock: updated.recommended_block || updated.agent_plan?.recommendedBlock || item.recommendedBlock,
         aiExplanation: updated.ai_explanation || updated.agent_plan?.explanation || item.aiExplanation,
         alternatives: updated.alternatives || updated.agent_plan?.alternatives || item.alternatives,
+        completionProof: updated.completion_proof || item.completionProof,
         raw: updated,
         prohibitedWindow: updated.prohibited_window || prohibitedWindow,
       } : item));
@@ -84,52 +111,56 @@ export default function OfficerRequests() {
     setRequests((previous) => previous.map((item) => item.id === request.id ? { ...item, status: newStatus, reason: feedback, prohibitedWindow } : item));
   };
 
-  const pendingRequests = useMemo(() => requests.filter((request) => ![
-    "Approved", "Completed", "APPROVED", "COMPLETED",
-  ].includes(request.raw?.status || request.status)), [requests]);
+  const counts = useMemo(() => {
+    const completedList = requests.filter(isCompletedWork);
+    const standardPending = requests.filter((r) =>
+      !isCompletedWork(r) &&
+      !["Approved", "APPROVED", "Completed", "COMPLETED", "Rejected", "REJECTED"].includes(r.raw?.status || r.status)
+    );
 
-  const counts = useMemo(() => ({
-    ALL: pendingRequests.length,
-    READY: pendingRequests.filter((request) => !request.conflict && !request.conflictingTrains?.length).length,
-    CONFLICT: pendingRequests.filter((request) => request.conflict || request.conflictingTrains?.length).length,
-    REVISION: pendingRequests.filter((request) => ["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status)).length,
-    APPROVED: requests.filter((request) => ["Approved", "APPROVED"].includes(request.raw?.status || request.status)).length,
-  }), [pendingRequests, requests]);
-
-  const trafficCounts = useMemo(() => {
-    let passenger = 0;
-    let goods = 0;
-    pendingRequests.forEach((req) => {
-      const t = getRequestTrafficType(req);
-      if (t === "PASSENGER" || t === "MIXED") passenger++;
-      if (t === "GOODS" || t === "MIXED") goods++;
-    });
     return {
-      ALL: pendingRequests.length,
-      PASSENGER: passenger,
-      GOODS: goods,
+      ALL: requests.filter((r) => !["Approved", "APPROVED"].includes(r.raw?.status || r.status)).length,
+      READY: standardPending.filter((r) => !r.conflict && !r.conflictingTrains?.length).length,
+      CONFLICT: standardPending.filter((r) => r.conflict || r.conflictingTrains?.length).length,
+      REVISION: standardPending.filter((r) => ["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(r.status)).length,
+      COMPLETED: completedList.length,
+      APPROVED: requests.filter((r) => ["Approved", "APPROVED"].includes(r.raw?.status || r.status)).length,
     };
-  }, [pendingRequests]);
+  }, [requests]);
 
-  const visibleRequests = useMemo(() => pendingRequests
+  const visibleRequests = useMemo(() => requests
     .filter((request) => {
-      // 1. Status Queue Filter
-      const conflict = request.conflict || request.conflictingTrains?.length;
-      if (queueFilter === "CONFLICT" && !conflict) return false;
-      if (queueFilter === "REVISION" && !["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status)) return false;
-      if (queueFilter === "READY" && conflict) return false;
+      const isComp = isCompletedWork(request);
+      const isApproved = ["Approved", "APPROVED"].includes(request.raw?.status || request.status);
 
-      // 2. Traffic Classification Filter
-      if (trafficFilter !== "ALL") {
-        const trafficType = getRequestTrafficType(request);
-        if (trafficFilter === "PASSENGER" && trafficType !== "PASSENGER" && trafficType !== "MIXED") return false;
-        if (trafficFilter === "GOODS" && trafficType !== "GOODS" && trafficType !== "MIXED") return false;
+      if (queueFilter === "COMPLETED") {
+        return isComp;
       }
-
+      if (queueFilter === "READY") {
+        if (isComp || isApproved) return false;
+        return !request.conflict && !request.conflictingTrains?.length;
+      }
+      if (queueFilter === "CONFLICT") {
+        if (isComp || isApproved) return false;
+        return Boolean(request.conflict || request.conflictingTrains?.length);
+      }
+      if (queueFilter === "REVISION") {
+        if (isComp || isApproved) return false;
+        return ["AI Processing", "Revised Plan", "REVISION_REQUIRED"].includes(request.status);
+      }
+      if (queueFilter === "ALL") {
+        // In All view: show all requests needing officer attention (pending requests and completed work submissions)
+        return !isApproved;
+      }
       return true;
     })
-    .sort((a, b) => (b.priorityScore ?? b.agentPlan?.priorityScore ?? 0) - (a.priorityScore ?? a.agentPlan?.priorityScore ?? 0)),
-  [pendingRequests, queueFilter, trafficFilter]);
+    .sort((a, b) => {
+      const aComp = isCompletedWork(a);
+      const bComp = isCompletedWork(b);
+      if (queueFilter === "ALL" && aComp !== bComp) return aComp ? -1 : 1;
+      return (b.priorityScore ?? b.agentPlan?.priorityScore ?? 0) - (a.priorityScore ?? a.agentPlan?.priorityScore ?? 0);
+    }),
+  [requests, queueFilter]);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f5f7f8]">
@@ -157,92 +188,39 @@ export default function OfficerRequests() {
             {error && <div role="alert" className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>{error}</span></div>}
 
             <section aria-labelledby="queue-heading">
-              <div className="mb-4 rounded-xl border border-[#d9e1e5] bg-white p-3.5 shadow-sm shadow-slate-900/[0.03] space-y-3">
-                <div className="sm:flex sm:items-center sm:justify-between sm:gap-4">
-                  <div className="mb-3 px-1 sm:mb-0">
-                    <h2 id="queue-heading" className="text-lg font-semibold text-[#172630]">Decision queue</h2>
-                    <p className="text-sm text-[#697780]">{visibleRequests.length} shown · sorted by priority</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#f1f5f6] p-1 sm:flex" aria-label="Filter request queue">
-                    {FILTERS.map(({ value, label, icon: Icon }) => (
-                      <button key={value} type="button" onClick={() => setQueueFilter(value)} aria-pressed={queueFilter === value} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] ${queueFilter === value ? "bg-white text-[#203f53] shadow-sm" : "text-[#60717d] hover:bg-white/70"}`}>
-                        <Icon size={16} aria-hidden="true" /> {label}
-                        <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs ${queueFilter === value ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>{counts[value]}</span>
-                      </button>
-                    ))}
-                  </div>
+              <div className="mb-4 rounded-xl border border-[#d9e1e5] bg-white p-3.5 shadow-sm shadow-slate-900/[0.03] sm:flex sm:items-center sm:justify-between sm:gap-4">
+                <div className="mb-3 px-1 sm:mb-0">
+                  <h2 id="queue-heading" className="text-lg font-semibold text-[#172630]">Decision queue</h2>
+                  <p className="text-sm text-[#697780]">{visibleRequests.length} shown · sorted by priority</p>
                 </div>
-
-                {/* Traffic Classification Filter Bar (Goods vs Passenger) */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf1f3] pt-3 px-1">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[#486071]">
-                    <TrainFront size={15} className="text-[#315b75]" aria-hidden="true" />
-                    <span>Traffic Classification Filter:</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 rounded-lg bg-[#f1f5f6] p-1" aria-label="Filter by train traffic category">
-                    <button
-                      type="button"
-                      onClick={() => setTrafficFilter("ALL")}
-                      aria-pressed={trafficFilter === "ALL"}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] transition-all ${
-                        trafficFilter === "ALL"
-                          ? "bg-white text-[#172630] shadow-xs font-bold"
-                          : "text-[#60717d] hover:bg-white/60"
-                      }`}
-                    >
-                      <TrainFront size={14} className={trafficFilter === "ALL" ? "text-[#315b75]" : "text-slate-400"} />
-                      <span>All Traffic</span>
-                      <span className={`rounded-full px-1.5 py-0.2 text-[11px] ${trafficFilter === "ALL" ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>
-                        {trafficCounts.ALL}
-                      </span>
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#f1f5f6] p-1 sm:flex" aria-label="Filter request queue">
+                  {FILTERS.map(({ value, label, icon: Icon }) => (
+                    <button key={value} type="button" onClick={() => setQueueFilter(value)} aria-pressed={queueFilter === value} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] ${queueFilter === value ? "bg-white text-[#203f53] shadow-sm" : "text-[#60717d] hover:bg-white/70"}`}>
+                      <Icon size={16} aria-hidden="true" /> {label}
+                      <span className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs ${queueFilter === value ? "bg-[#315b75] text-white" : "bg-[#dfe7eb] text-[#526570]"}`}>{counts[value]}</span>
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setTrafficFilter("PASSENGER")}
-                      aria-pressed={trafficFilter === "PASSENGER"}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] transition-all ${
-                        trafficFilter === "PASSENGER"
-                          ? "bg-blue-700 text-white shadow-xs font-bold"
-                          : "text-[#60717d] hover:bg-white/60"
-                      }`}
-                    >
-                      <Users size={14} className={trafficFilter === "PASSENGER" ? "text-white" : "text-blue-600"} />
-                      <span>Passenger Trains</span>
-                      <span className={`rounded-full px-1.5 py-0.2 text-[11px] ${trafficFilter === "PASSENGER" ? "bg-white/25 text-white" : "bg-blue-100 text-blue-800"}`}>
-                        {trafficCounts.PASSENGER}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setTrafficFilter("GOODS")}
-                      aria-pressed={trafficFilter === "GOODS"}
-                      className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75] transition-all ${
-                        trafficFilter === "GOODS"
-                          ? "bg-amber-600 text-white shadow-xs font-bold"
-                          : "text-[#60717d] hover:bg-white/60"
-                      }`}
-                    >
-                      <Package size={14} className={trafficFilter === "GOODS" ? "text-white" : "text-amber-700"} />
-                      <span>Goods / Freight Trains</span>
-                      <span className={`rounded-full px-1.5 py-0.2 text-[11px] ${trafficFilter === "GOODS" ? "bg-white/25 text-white" : "bg-amber-100 text-amber-900"}`}>
-                        {trafficCounts.GOODS}
-                      </span>
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
 
               {loading && requests.length === 0 ? (
                 <div role="status" aria-live="polite" className="space-y-3"><span className="sr-only">Loading possession requests</span>{[1, 2, 3].map((item) => <div key={item} className="h-48 animate-pulse rounded-xl border border-[#e0e5e7] bg-white" />)}</div>
-              ) : pendingRequests.length === 0 ? (
+              ) : counts.ALL === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#cad5da] bg-white px-6 py-12 text-center"><span className="mx-auto grid size-12 place-items-center rounded-full bg-emerald-50 text-emerald-700"><FileCheck size={24} aria-hidden="true" /></span><h3 className="mt-4 text-lg font-semibold text-[#172630]">The decision queue is clear</h3><p className="mx-auto mt-1 max-w-md text-base leading-6 text-[#65747e]">All submitted requests have a decision. Released plans remain available with their evidence trail.</p></div>
               ) : visibleRequests.length === 0 ? (
                 <div className="rounded-xl border border-[#d9e1e5] bg-white px-6 py-10 text-center"><h3 className="text-base font-semibold text-[#172630]">No requests match this filter</h3><button type="button" onClick={() => setQueueFilter("ALL")} className="mt-3 min-h-11 rounded-lg px-4 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#315b75]">Show all requests</button></div>
               ) : (
                 <div className="space-y-4">
-                  {visibleRequests.map((request) => <RequestCard key={request.id} request={request} onApprove={(item, feedback, alternativeId) => handleDecision(item, "APPROVED", feedback, alternativeId)} onRevision={(item, feedback, alternativeId, prohibitedWindow, newWindow) => handleDecision(item, "REVISION_REQUIRED", feedback, alternativeId, prohibitedWindow, newWindow)} onDecline={(item, feedback) => handleDecision(item, "REJECTED", feedback)} />)}
+                  {visibleRequests.map((request) => (
+                    <RequestCard
+                      key={request.id}
+                      request={request}
+                      onApprove={(item, feedback, alternativeId) => handleDecision(item, "APPROVED", feedback, alternativeId)}
+                      onRevision={(item, feedback, alternativeId, prohibitedWindow, newWindow) => handleDecision(item, "REVISION_REQUIRED", feedback, alternativeId, prohibitedWindow, newWindow)}
+                      onDecline={(item, feedback) => handleDecision(item, "REJECTED", feedback)}
+                      onVerifyCompleted={(item, feedback) => handleDecision(item, "VERIFIED", feedback)}
+                    />
+                  ))}
                 </div>
               )}
             </section>

@@ -58,11 +58,6 @@ let useFallbackStore = false;
 const fallbackStore = {
   users: [
     { id: 1, username: "admin", name: "System Admin", email: "admin@rbps.com", password_hash: "admin123", role: "ADMIN", department: null },
-    { id: 2, username: "officer1", name: "Officer Sharma", email: "officer.sharma@rbps.com", password_hash: "officer123", role: "OFFICER", department: "Control" },
-    { id: 3, username: "officer2", name: "Officer Patil", email: "officer.patil@rbps.com", password_hash: "officer123", role: "OFFICER", department: "Control" },
-    { id: 4, username: "eng_team", name: "Engineering Team Lead", email: "engineering@rbps.com", password_hash: "eng123", role: "TEAMS", department: "Engineering" },
-    { id: 5, username: "snt_team", name: "Signal & Telecom Team", email: "signaltelecom@rbps.com", password_hash: "snt123", role: "TEAMS", department: "Signal & Telecom" },
-    { id: 6, username: "trd_team", name: "Traction Distribution Team", email: "traction@rbps.com", password_hash: "trd123", role: "TEAMS", department: "Traction Distribution" },
   ],
   tracks: [],
   assets: [],

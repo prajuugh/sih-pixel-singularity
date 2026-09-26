@@ -9,6 +9,7 @@ import {
   LogOut,
   ClipboardCheck,
   CheckCircle2,
+  Wrench,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 
@@ -27,6 +28,7 @@ const navItemsByRole = {
   teams: [
     { to: "/teams", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/teams/requests", label: "Submit Request", icon: FileEdit },
+    { to: "/teams/maintenance", label: "Maintenance", icon: Wrench },
     { to: "/teams/check-status", label: "Check Status", icon: Search },
     { to: "/teams/calendar", label: "Calendar", icon: Calendar },
   ],

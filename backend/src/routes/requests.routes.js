@@ -7,6 +7,7 @@ const {
   postCreateRequest,
   submitRequest,
   postReviewRequest,
+  completeWorkRequest,
 } = require("../controllers/request.controller");
 const { requireAuth } = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
@@ -15,6 +16,7 @@ router.get("/", requireAuth, getAllRequests);
 router.get("/:requestId", requireAuth, getRequestById);
 router.post("/", requireAuth, requireRole("ADMIN", "TEAMS"), postCreateRequest);
 router.post("/:requestId/submit", requireAuth, submitRequest);
+router.post("/:requestId/complete", requireAuth, completeWorkRequest);
 router.post("/:requestId/review", requireAuth, requireRole("OFFICER"), postReviewRequest);
 
 module.exports = router;

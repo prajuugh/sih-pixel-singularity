@@ -12,6 +12,9 @@ export default function OperationsOverview({
   columns,
   calendarPath,
   getMetricRoute,
+  alertBanner = null,
+  tableTitle = "Upcoming maintenance",
+  tableSubtitle = "Confirmed possession windows ordered for operational review.",
 }) {
   const values = stats.map(({ value }) => Number(value) || 0);
   const maxValue = Math.max(...values, 1);
@@ -19,22 +22,38 @@ export default function OperationsOverview({
   const approved = Number(stats.find(({ key }) => key === "approved")?.value) || 0;
   const approvalRate = total ? Math.min(100, Math.round((approved / total) * 100)) : 0;
 
-  const metricContent = ({ key, label, value }) => {
-    const meta = statMeta[key] || statMeta.total;
+  const renderCardContent = (stat, hasLink = false) => {
+    const meta = statMeta[stat.key] || statMeta.total;
     const Icon = meta.icon;
 
     return (
-      <>
-        <div className={`${meta.bg} rounded-xl p-2.5`}>
-          <Icon className={meta.iconColor} size={20} strokeWidth={2} />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-gray-500">
-            {label}
+      <div className="flex flex-col justify-between w-full h-full min-w-0">
+        {/* Top: Text starting from left above emoji */}
+        <div className="flex items-start justify-between gap-1 min-h-[2rem]">
+          <p
+            className="text-[11px] xl:text-xs font-medium text-gray-500 line-clamp-2 leading-snug"
+            title={stat.label}
+          >
+            {stat.label}
           </p>
-          <p className="text-2xl font-semibold tracking-tight text-gray-950">{value}</p>
+          {hasLink && (
+            <ArrowUpRight
+              size={12}
+              className="text-gray-300 group-hover:text-[#cf432c] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 mt-0.5"
+            />
+          )}
         </div>
-      </>
+
+        {/* Bottom: Emoji on left + Number */}
+        <div className="flex items-center gap-2 pt-1 mt-auto">
+          <div className={`${meta.bg} rounded-md p-1.5 shrink-0 transition-transform group-hover:scale-105`}>
+            <Icon className={meta.iconColor} size={16} strokeWidth={2} />
+          </div>
+          <span className="text-xl xl:text-2xl font-bold tracking-tight text-gray-950 leading-none">
+            {stat.value}
+          </span>
+        </div>
+      </div>
     );
   };
 
@@ -53,7 +72,7 @@ export default function OperationsOverview({
           </div>
           <Link
             to={calendarPath}
-            className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition-colors duration-150 hover:border-[#cf432c] hover:text-[#b83825] sm:self-auto"
+            className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition-colors duration-150 hover:border-[#cf432c] hover:text-[#b83825] sm:self-auto shadow-2xs"
           >
             <CalendarDays size={16} strokeWidth={2} />
             Calendar
@@ -61,25 +80,57 @@ export default function OperationsOverview({
           </Link>
         </header>
 
+        {/* Actionable Alert Banner (if any pending items require urgent action) */}
+        {alertBanner && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/70 to-white p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-all hover:shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-amber-100 p-2.5 text-amber-800 shrink-0 mt-0.5 shadow-2xs">
+                <alertBanner.icon size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-bold text-sm text-gray-950">{alertBanner.title}</h4>
+                  {alertBanner.count != null && (
+                    <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-900">
+                      {alertBanner.count} {alertBanner.countLabel || "Action Required"}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-gray-600 leading-relaxed">
+                  {alertBanner.description}
+                </p>
+              </div>
+            </div>
+            <Link
+              to={alertBanner.to}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 shrink-0 rounded-lg bg-[#cf432c] hover:bg-[#b83825] text-white px-4 text-xs font-bold shadow-xs transition-colors"
+            >
+              <span>{alertBanner.actionText || "Review Now"}</span>
+              <ArrowUpRight size={14} />
+            </Link>
+          </div>
+        )}
+
         <div className="grid gap-4 xl:grid-cols-12">
-          <section className="overflow-hidden rounded-xl border border-[#e3e5e4] bg-white xl:col-span-9">
-            <div className="grid grid-cols-2 border-b border-gray-100 lg:grid-cols-4">
+          <section className="overflow-hidden rounded-xl border border-[#e3e5e4] bg-white xl:col-span-9 shadow-2xs">
+            <div className={`grid grid-cols-2 sm:grid-cols-3 ${stats.length === 5 ? "lg:grid-cols-5" : stats.length === 6 ? "lg:grid-cols-6" : "lg:grid-cols-4"} border-b border-gray-100`}>
               {stats.map((stat) => {
                 const target = getMetricRoute?.(stat.key);
                 const classes =
-                  "flex min-w-0 items-center gap-3 border-r border-gray-100 p-4 text-left sm:p-5";
+                  "flex flex-col justify-between p-2.5 sm:px-3 sm:py-3 xl:px-3.5 xl:py-3.5 text-left border-r border-gray-100 last:border-r-0 min-w-0";
 
                 return target ? (
                   <Link
                     key={stat.key}
                     to={target}
-                    className={`${classes} transition-colors duration-150 hover:bg-[#fff7f5]`}
+                    className={`${classes} group transition-all duration-150 hover:bg-[#fff7f5] cursor-pointer`}
+                    title={`Click to open ${stat.label}`}
                   >
-                    {metricContent(stat)}
+                    {renderCardContent(stat, true)}
                   </Link>
                 ) : (
                   <div key={stat.key} className={classes}>
-                    {metricContent(stat)}
+                    {renderCardContent(stat, false)}
                   </div>
                 );
               })}
@@ -91,10 +142,8 @@ export default function OperationsOverview({
                   <CalendarDays size={20} strokeWidth={2} />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-950">Upcoming maintenance</h3>
-                  <p className="text-xs text-gray-500">
-                    Confirmed possession windows ordered for operational review.
-                  </p>
+                  <h3 className="font-semibold text-gray-950">{tableTitle}</h3>
+                  <p className="text-xs text-gray-500">{tableSubtitle}</p>
                 </div>
               </div>
               <Table columns={columns} rows={upcoming} rowKey="requestId" />

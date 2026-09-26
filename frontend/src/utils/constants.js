@@ -18,34 +18,7 @@ export const mockUsers = [
     username: "admin",
     password: "admin123",
     role: ROLES.ADMIN,
-    name: "Admin User",
-  },
-  {
-    username: "officer1",
-    password: "officer123",
-    role: ROLES.OFFICER,
-    name: "Officer Sharma",
-  },
-  {
-    username: "eng_team",
-    password: "eng123",
-    role: ROLES.TEAMS,
-    department: "Engineering",
-    name: "Engineering Team",
-  },
-  {
-    username: "snt_team",
-    password: "snt123",
-    role: ROLES.TEAMS,
-    department: "Signal & Telecom",
-    name: "Signal & Telecom Team",
-  },
-  {
-    username: "trd_team",
-    password: "trd123",
-    role: ROLES.TEAMS,
-    department: "Traction",
-    name: "Traction Distribution Team",
+    name: "System Admin",
   },
 ];
 
@@ -68,9 +41,14 @@ export const assetConditions = ["Good", "Fair", "Poor", "Critical"];
 export const requestStatusStyles = {
   "AI Processing": "bg-amber-100 text-amber-700",
   Approved: "bg-green-100 text-green-700",
+  APPROVED: "bg-green-100 text-green-700",
   Declined: "bg-red-100 text-red-700",
+  REJECTED: "bg-red-100 text-red-700",
   "Waiting for Approval": "bg-blue-100 text-blue-700",
-  Completed: "bg-green-100 text-green-700",
+  Completed: "bg-teal-100 text-teal-800",
+  COMPLETED: "bg-teal-100 text-teal-800",
+  WORK_COMPLETED: "bg-teal-100 text-teal-800",
+  VERIFIED: "bg-emerald-100 text-emerald-800",
 };
 
 export const activityActionStyles = {

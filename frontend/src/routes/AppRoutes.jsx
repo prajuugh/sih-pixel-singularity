@@ -14,6 +14,7 @@ import TeamsDashboard from "../pages/teams/TeamsDashboard";
 import TeamRequests from "../pages/teams/TeamRequests";
 import TeamCalendar from "../pages/teams/TeamCalendar";
 import CheckStatus from "../pages/teams/CheckStatus";
+import TeamMaintenance from "../pages/teams/TeamMaintenance";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -107,6 +108,14 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute allowedRole="teams">
             <LiveMap isSubmitDefault={true} />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams/maintenance"
+        element={
+          <ProtectedRoute allowedRole="teams">
+            <TeamMaintenance />
           </ProtectedRoute>
         }
       />

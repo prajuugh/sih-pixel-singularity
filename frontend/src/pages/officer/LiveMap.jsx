@@ -1220,14 +1220,14 @@ export default function LiveMap({ isSubmitDefault = false }) {
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 relative">
 
           {/* ── TOP MINIMAL STATUS & CONTROL BAR ── */}
-          <div className="h-13 bg-white border-b border-gray-200 px-3 md:px-4 flex items-center justify-between shrink-0 z-20 shadow-xs">
-            <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+          <div className="min-h-14 bg-white border-b border-gray-200 px-3 md:px-4 flex items-center justify-between shrink-0 z-30 shadow-xs relative">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {/* Dock Toggle Button — Only for non-engineers */}
               {!isEngineer && (
                 <button
                   type="button"
                   onClick={() => setIsDockCollapsed((prev) => !prev)}
-                  className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
                     !isDockCollapsed
                       ? "bg-slate-100 border-slate-300 text-slate-800 hover:bg-slate-200"
                       : "bg-[#171918] border-black text-white hover:bg-black"
@@ -1240,16 +1240,16 @@ export default function LiveMap({ isSubmitDefault = false }) {
                 </button>
               )}
 
-              <div className="flex items-center gap-2 truncate">
+              <div className="flex items-center gap-2 shrink-0">
                 <FileEdit className="text-[#b83825] shrink-0" size={18} />
-                <h1 className="text-sm md:text-base font-bold text-gray-900 truncate">
+                <h1 className="text-sm md:text-base font-bold text-gray-900 whitespace-nowrap">
                   {isEngineer ? "Submit Maintenance Request" : "RailSync Live Operations Map"}
                 </h1>
 
                 {/* State / India Selector Dropdown */}
-                <div className="flex items-center gap-1.5 ml-1">
+                <div className="flex items-center gap-1.5 ml-1 relative z-30">
                   <div className="relative flex items-center">
-                    <MapPin size={13} className="absolute left-2.5 text-purple-600 pointer-events-none" />
+                    <MapPin size={13} className="absolute left-2.5 text-purple-600 pointer-events-none z-10" />
                     <select
                       aria-label="Select State or All India"
                       value={selectedState}
@@ -1265,14 +1265,14 @@ export default function LiveMap({ isSubmitDefault = false }) {
                         ))}
                       </optgroup>
                     </select>
-                    <ChevronDown size={13} className="absolute right-2 text-purple-700 pointer-events-none" />
+                    <ChevronDown size={13} className="absolute right-2 text-purple-700 pointer-events-none z-10" />
                   </div>
 
                   {selectedState !== "ALL" && (
                     <button
                       type="button"
                       onClick={() => handleSelectState("ALL")}
-                      className="p-1 rounded-md text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                      className="p-1 rounded-md text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer shrink-0"
                       title="Reset to All India"
                     >
                       <X size={14} />
@@ -1281,7 +1281,7 @@ export default function LiveMap({ isSubmitDefault = false }) {
                 </div>
 
                 {loadingTracks && (
-                  <span className="flex items-center gap-1 text-xs text-blue-600 animate-pulse ml-1">
+                  <span className="flex items-center gap-1 text-xs text-blue-600 animate-pulse ml-1 shrink-0">
                     <RefreshCw size={11} className="animate-spin" /> Loading tracks…
                   </span>
                 )}

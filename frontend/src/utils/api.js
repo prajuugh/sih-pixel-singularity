@@ -126,13 +126,13 @@ export async function fetchRequests() {
           else if (r.status === "REVISION_REQUIRED") uiStatus = "Revised Plan";
           else if (r.status === "APPROVED") uiStatus = "Approved";
           else if (r.status === "REJECTED") uiStatus = "Declined";
-          else if (r.status === "COMPLETED") uiStatus = "Completed";
+          else if (r.status === "COMPLETED" || r.status === "WORK_COMPLETED") uiStatus = "Completed";
 
           let uiStage = "Officer Review";
           if (r.status === "APPROVED") uiStage = "Scheduled";
           else if (r.status === "REVISION_REQUIRED") uiStage = "Plan Revised";
           else if (r.status === "REJECTED") uiStage = "Closed";
-          else if (r.status === "COMPLETED") uiStage = "Completed";
+          else if (r.status === "COMPLETED" || r.status === "WORK_COMPLETED") uiStage = "Completed";
 
           return {
             id: r.request_id,
@@ -143,6 +143,8 @@ export async function fetchRequests() {
             reason: r.officer_feedback || r.description || "Submitted for planning evaluation.",
             stage: uiStage,
             updated: r.updated_at ? new Date(r.updated_at).toLocaleString() : r.requested_date,
+            completionProof: r.completion_proof || null,
+            completedAt: r.completion_proof?.completed_at || null,
             // Multi-Agent Block Plan fields
             agentPlan: r.agent_plan,
             priorityScore: r.priority_score ?? r.agent_plan?.priorityScore ?? (r.agent_plan?.schemaVersion === "2.0" ? null : 75),
@@ -217,6 +219,30 @@ export async function updateRequestStatus(requestId, status, decision = "APPROVE
     console.warn("Backend status update offline, falling back:", err.message);
   }
   return delay({ success: true });
+}
+
+export async function submitWorkCompletion(requestId, completionData) {
+  try {
+    const headers = getAuthHeaders("TEAMS");
+    const res = await fetch(`${BASE_URL}/requests/${requestId}/complete`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(completionData),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return { success: true, data: json.data, message: json.message };
+    }
+    const errorBody = await res.json().catch(() => null);
+    return { success: false, message: errorBody?.error?.message || "Failed to submit completion" };
+  } catch (err) {
+    console.warn("Backend submitWorkCompletion offline:", err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+export async function verifyWorkCompletion(requestId, feedback = "Work completion verified and approved.") {
+  return updateRequestStatus(requestId, "COMPLETED", "VERIFIED", feedback);
 }
 
 // ---- Railway Tracks & Train Information API ----
@@ -477,36 +503,67 @@ export async function fetchAgentPlan(payload) {
 }
 
 // ---- Other Dashboard Stats (Dynamically derived from live requests) ----
-export async function fetchDashboardStats() {
+export async function fetchDashboardStats(role = "OFFICER") {
   const requests = await fetchRequests();
   const total = requests.length;
+
+  const isVerified = (r) => Boolean(
+    r.completionProof?.verified_by_officer ||
+    r.raw?.completion_proof?.verified_by_officer ||
+    r.raw?.status === "VERIFIED" ||
+    r.status === "VERIFIED"
+  );
+
+  const isCompleted = (r) => Boolean(
+    r.completionProof ||
+    r.raw?.completion_proof ||
+    r.status === "Completed" ||
+    r.status === "COMPLETED" ||
+    r.status === "WORK_COMPLETED"
+  );
+
   const pending = requests.filter(
     (r) =>
-      r.status === "Waiting for Approval" ||
+      !isCompleted(r) &&
+      (r.status === "Waiting for Approval" ||
       r.status === "AI Processing" ||
       r.status === "Revised Plan" ||
       r.status === "SUBMITTED" ||
-      r.status === "UNDER_REVIEW"
+      r.status === "UNDER_REVIEW")
   ).length;
+
+  const awaitingVerification = requests.filter((r) => isCompleted(r) && !isVerified(r)).length;
+  const verifiedRestored = requests.filter((r) => isVerified(r)).length;
+
   const approved = requests.filter(
-    (r) => r.status === "Approved" || r.status === "APPROVED" || r.status === "Completed"
+    (r) => (r.status === "Approved" || r.status === "APPROVED") && !isCompleted(r)
   ).length;
-  const active = requests.filter(
-    (r) => r.status === "Approved" || r.stage === "Scheduled" || r.status === "SCHEDULED"
-  ).length;
+
+  const isTeam = String(role || "").toUpperCase() === "TEAM" || String(role || "").toUpperCase() === "TEAMS";
+
+  if (isTeam) {
+    return [
+      { key: "total", label: "Total Requests", value: total },
+      { key: "pending", label: "Awaiting Approval", value: pending },
+      { key: "approved", label: "Ready to Execute", value: approved },
+      { key: "awaitingVerification", label: "Proof Submitted", value: awaitingVerification },
+      { key: "verifiedRestored", label: "Line Restored", value: verifiedRestored },
+    ];
+  }
 
   return [
     { key: "total", label: "Total Requests", value: total },
-    { key: "pending", label: "Pending Requests", value: pending },
-    { key: "approved", label: "Approved Requests", value: approved },
-    { key: "active", label: "Active Work", value: active },
+    { key: "pending", label: "Pending Review", value: pending },
+    { key: "approved", label: "Approved Blocks", value: approved },
+    { key: "awaitingVerification", label: "Awaiting Verification", value: awaitingVerification },
+    { key: "verifiedRestored", label: "Verified & Restored", value: verifiedRestored },
   ];
 }
 
 export async function fetchUpcomingMaintenance() {
   const requests = await fetchRequests();
   const relevant = requests.filter(
-    (r) => r.status === "Approved" || r.status === "Waiting for Approval" || r.status === "Revised Plan"
+    (r) => r.status === "Approved" || r.status === "Waiting for Approval" || r.status === "Revised Plan" || r.status === "Completed"
   );
 
   return relevant.map((r) => {
@@ -531,15 +588,40 @@ export async function fetchUpcomingMaintenance() {
 
     const startTime = r.recommendedBlock?.startTime || r.raw?.preferred_start_time || "19:00";
     const endTime = r.recommendedBlock?.endTime || r.raw?.preferred_end_time || "21:00";
+    const trackId = r.raw?.track_ids?.[0] || r.raw?.track_id || r.agentPlan?.trackId || "Track";
+
+    const isVerified = Boolean(
+      r.completionProof?.verified_by_officer ||
+      r.raw?.completion_proof?.verified_by_officer ||
+      r.raw?.status === "VERIFIED" ||
+      r.status === "VERIFIED"
+    );
+
+    const isCompleted = Boolean(
+      r.completionProof ||
+      r.raw?.completion_proof ||
+      r.status === "Completed" ||
+      r.status === "COMPLETED" ||
+      r.status === "WORK_COMPLETED"
+    );
 
     return {
       day,
       month,
-      time: `${startTime} - ${endTime}`,
+      time: `${startTime}–${endTime}`,
       requestId: r.id,
       name: r.type,
       department: r.department || "Engineering",
       description: r.reason || r.raw?.description || "Maintenance track possession work",
+      trackId,
+      status: r.status,
+      rawStatus: r.raw?.status || r.status,
+      completionProof: r.completionProof,
+      isVerified,
+      isCompleted,
+      conflict: r.conflict,
+      priorityScore: r.priorityScore,
+      raw: r.raw,
     };
   });
 }
