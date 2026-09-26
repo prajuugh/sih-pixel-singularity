@@ -17,15 +17,37 @@ import Navbar from "../../components/common/Navbar";
 import { fetchUsers, createUser, deleteUser } from "../../utils/api";
 
 const initialUsers = [
-  { id: 1, username: "admin", email: "admin@rbps.com", role: "Admin", department: "—" },
+  { id: 1, name: "System Admin", username: "admin", email: "admin@rbps.com", role: "Admin", department: "—" },
 ];
 
 const roleBadgeStyles = {
+  ADMIN: "bg-red-100 text-red-700",
   Admin: "bg-red-100 text-red-700",
+  OFFICER: "bg-blue-100 text-blue-700",
   Officer: "bg-blue-100 text-blue-700",
+  TEAMS: "bg-green-100 text-green-700",
   Teams: "bg-green-100 text-green-700",
+  TEAM: "bg-green-100 text-green-700",
   Team: "bg-green-100 text-green-700",
 };
+
+function normalizeUser(u) {
+  const rawRole = (u.role || "Officer").toUpperCase();
+  let displayRole = "Officer";
+  if (rawRole === "ADMIN") displayRole = "Admin";
+  else if (rawRole === "TEAMS" || rawRole === "TEAM") displayRole = "Teams";
+  else displayRole = "Officer";
+
+  return {
+    id: u.id,
+    name: u.name || u.username || (u.email ? u.email.split("@")[0] : "User"),
+    username: u.username || u.name || (u.email ? u.email.split("@")[0] : "user"),
+    email: u.email || "",
+    role: displayRole,
+    department: u.department || "—",
+    password: u.password,
+  };
+}
 
 export default function AdminDashboard() {
   const [search, setSearch] = useState("");
@@ -36,20 +58,7 @@ export default function AdminDashboard() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const testUsernames = new Set(["officer1", "eng_team", "snt_team", "trd_team", "control1"]);
-          const seenUsernames = new Set();
-          const seenEmails = new Set();
-          const deduplicated = [];
-          for (const u of parsed) {
-            const uName = (u.username || "").trim().toLowerCase();
-            const uEmail = (u.email || "").trim().toLowerCase();
-            if (!testUsernames.has(uName) && !seenUsernames.has(uName) && !seenEmails.has(uEmail)) {
-              if (uName) seenUsernames.add(uName);
-              if (uEmail) seenEmails.add(uEmail);
-              deduplicated.push(u);
-            }
-          }
-          if (deduplicated.length > 0) return deduplicated;
+          return parsed.map(normalizeUser);
         }
       }
     } catch (e) {
@@ -89,7 +98,7 @@ export default function AdminDashboard() {
     fetchUsers()
       .then((apiUsers) => {
         if (Array.isArray(apiUsers) && apiUsers.length > 0) {
-          setUsers(apiUsers);
+          setUsers(apiUsers.map(normalizeUser));
         }
       })
       .catch((err) => console.warn("Could not fetch users from backend:", err));
@@ -106,11 +115,15 @@ export default function AdminDashboard() {
 
   const filteredUsers = users.filter((u) => {
     const term = search.toLowerCase();
+    const uEmail = (u.email || "").toLowerCase();
+    const uName = (u.username || u.name || "").toLowerCase();
+    const uDept = (u.department || "").toLowerCase();
+    const uRole = (u.role || "").toLowerCase();
     const matchesSearch =
-      u.email.toLowerCase().includes(term) ||
-      u.username.toLowerCase().includes(term) ||
-      (u.department || "").toLowerCase().includes(term) ||
-      (u.role || "").toLowerCase().includes(term);
+      uEmail.includes(term) ||
+      uName.includes(term) ||
+      uDept.includes(term) ||
+      uRole.includes(term);
     const matchesDept =
       deptFilter === "All Departments" || u.department === deptFilter;
     return matchesSearch && matchesDept;
