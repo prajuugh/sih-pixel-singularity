@@ -17,12 +17,14 @@ function getTransporter() {
     try {
       const isGmail = SMTP_HOST.toLowerCase().includes("gmail");
       const cleanPass = SMTP_PASSWORD.trim().replace(/\s+/g, "");
+      const rawUser = SMTP_USER.trim();
+      const cleanUser = isGmail && !rawUser.includes("@") ? `${rawUser}@gmail.com` : rawUser;
 
       const transportConfig = isGmail
         ? {
             service: "gmail",
             auth: {
-              user: SMTP_USER.trim(),
+              user: cleanUser,
               pass: cleanPass,
             },
           }
@@ -31,7 +33,7 @@ function getTransporter() {
             port: SMTP_PORT,
             secure: SMTP_SECURE,
             auth: {
-              user: SMTP_USER.trim(),
+              user: cleanUser,
               pass: cleanPass,
             },
             tls: {
@@ -68,8 +70,16 @@ async function sendEmail({ to, subject, html, text }) {
   }
 
   try {
+    const rawUser = (SMTP_USER || "").trim();
+    const cleanUser = rawUser.includes("@") ? rawUser : `${rawUser}@gmail.com`;
+    let fromAddress = (SMTP_FROM || "").trim();
+    if (!fromAddress.includes("@")) {
+      const displayName = fromAddress.replace(/["']/g, "") || "Indian Railways RBPS";
+      fromAddress = `"${displayName}" <${cleanUser}>`;
+    }
+
     const info = await activeTransporter.sendMail({
-      from: SMTP_FROM,
+      from: fromAddress,
       to,
       subject,
       text: text || "Please view this email in an HTML-compatible email client.",
