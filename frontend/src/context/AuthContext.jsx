@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect } from "react";
 import { mockUsers } from "../utils/mockUsers";
+import { loginRequest } from "../utils/api";
 
 export const AuthContext = createContext(null);
 
@@ -24,19 +25,53 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  const login = (username, password) => {
+  const updateUser = (updatedFields) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updatedFields };
+      localStorage.setItem("rbps_user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const login = async (username, password) => {
     const cleanIdent = (username || "").trim().toLowerCase();
     const cleanPassword = (password || "").trim();
 
     const normalizeRole = (role) => {
       const r = (role || "").toLowerCase();
       if (r === "officer") return "officer";
-      if (r === "team" || r === "teams") return "teams";
+      if (r === "team" || r === "teams" || r === "engineer") return "teams";
       if (r === "admin") return "admin";
       return r;
     };
 
-    // 1. Check custom users saved from Admin Dashboard
+    // 1. Try real backend login
+    try {
+      const backendRes = await loginRequest(username, password);
+      if (backendRes && backendRes.user) {
+        if (backendRes.token) {
+          localStorage.setItem("rbps_token", backendRes.token);
+        }
+        const normalizedRole = normalizeRole(backendRes.user.role);
+        const normalizedUser = {
+          ...backendRes.user,
+          role: normalizedRole,
+          is_first_login: Boolean(backendRes.user.is_first_login),
+        };
+        setUser(normalizedUser);
+        return {
+          success: true,
+          role: normalizedRole,
+          is_first_login: normalizedUser.is_first_login,
+          user: normalizedUser,
+        };
+      }
+    } catch (e) {
+      console.warn("Backend auth failed, trying offline mock:", e);
+    }
+
+    // 2. Check custom users saved from Admin Dashboard
     let adminUsers = [];
     try {
       const stored = localStorage.getItem("rbps_admin_users");
@@ -59,12 +94,18 @@ export function AuthProvider({ children }) {
       const normalizedUser = {
         ...foundAdmin,
         role: normalizeRole(foundAdmin.role),
+        is_first_login: Boolean(foundAdmin.is_first_login),
       };
       setUser(normalizedUser);
-      return { success: true, role: normalizedUser.role };
+      return {
+        success: true,
+        role: normalizedUser.role,
+        is_first_login: normalizedUser.is_first_login,
+        user: normalizedUser,
+      };
     }
 
-    // 2. Check built-in mock users
+    // 3. Check built-in mock users
     const foundMock = mockUsers.find((u) => {
       const uname = (u.username || "").trim().toLowerCase();
       const uemail = (u.email || "").trim().toLowerCase();
@@ -77,9 +118,15 @@ export function AuthProvider({ children }) {
       const normalizedUser = {
         ...foundMock,
         role: normalizeRole(foundMock.role),
+        is_first_login: false,
       };
       setUser(normalizedUser);
-      return { success: true, role: normalizedUser.role };
+      return {
+        success: true,
+        role: normalizedUser.role,
+        is_first_login: false,
+        user: normalizedUser,
+      };
     }
 
     return { success: false, message: "Invalid username or password" };
@@ -92,7 +139,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -156,15 +156,59 @@ function queryFallback(text, params = []) {
 
   if (sql.includes("FROM USERS")) {
     let results = [...fallbackStore.users];
-    if (sql.includes("WHERE EMAIL =")) {
-      const email = params[0];
-      results = results.filter((u) => u.email === email);
-    }
-    if (sql.includes("WHERE ID =")) {
+    if (
+      sql.includes("WHERE LOWER(EMAIL) =") ||
+      sql.includes("WHERE LOWER(USERNAME) =") ||
+      sql.includes("WHERE EMAIL =")
+    ) {
+      const ident = (params[0] || "").toLowerCase().trim();
+      results = results.filter(
+        (u) =>
+          (u.email && u.email.toLowerCase() === ident) ||
+          (u.username && u.username.toLowerCase() === ident) ||
+          (u.name && u.name.toLowerCase() === ident)
+      );
+    } else if (sql.includes("WHERE ID =")) {
       const id = parseInt(params[0]);
       results = results.filter((u) => u.id === id);
     }
+    if (sql.includes("LIMIT 1")) {
+      results = results.slice(0, 1);
+    }
     return { rows: results, rowCount: results.length };
+  }
+
+  if (sql.includes("INSERT INTO USERS")) {
+    const newUser = {
+      id: fallbackStore.users.length + 1,
+      name: params[0],
+      username: params[1] || (params[0] ? params[0].replace(/\s+/g, "_").toLowerCase() : "user"),
+      email: params[2],
+      password_hash: params[3],
+      role: params[4],
+      department: params[5] || null,
+      is_first_login: true,
+      created_at: new Date().toISOString(),
+    };
+    fallbackStore.users.push(newUser);
+    return { rows: [newUser], rowCount: 1 };
+  }
+
+  if (sql.includes("UPDATE USERS")) {
+    const newHash = params[0];
+    const targetIdent = params[params.length - 1];
+    const user = fallbackStore.users.find(
+      (u) =>
+        u.id === Number(targetIdent) ||
+        (u.username && u.username.toLowerCase() === String(targetIdent).toLowerCase()) ||
+        (u.email && u.email.toLowerCase() === String(targetIdent).toLowerCase())
+    );
+    if (user) {
+      user.password_hash = newHash;
+      user.is_first_login = false;
+      user.updated_at = new Date().toISOString();
+    }
+    return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
   }
 
   if (sql.includes("FROM ASSETS")) {

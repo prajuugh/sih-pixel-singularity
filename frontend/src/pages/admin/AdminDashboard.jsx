@@ -70,6 +70,7 @@ export default function AdminDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     name: "",
+    username: "",
     email: "",
     password: "",
     role: "",
@@ -141,24 +142,34 @@ export default function AdminDashboard() {
 
   const handleAddUser = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password || !form.role) {
-      setError("Name, email, password, and role are required.");
+    if (!form.name || !form.username || !form.email || !form.password || !form.role) {
+      setError("Name, username, email, initial password, and role are required.");
       return;
     }
+
+    const cleanUsername = form.username.trim();
+    if (/\s/.test(cleanUsername)) {
+      setError("Username must not contain any spaces.");
+      return;
+    }
+
+    if (cleanUsername.length < 3) {
+      setError("Username must be at least 3 characters long.");
+      return;
+    }
+
     if (form.role === "Team" && !form.department) {
       setError("Please select a department for the team account.");
       return;
     }
 
-    const candidateUsername = (form.name.trim().toLowerCase().replace(/\s+/g, "_") || form.email.split("@")[0].toLowerCase()).trim();
-    const candidateRawName = form.name.trim().toLowerCase();
+    const candidateUsername = cleanUsername.toLowerCase();
     const candidateEmail = form.email.trim().toLowerCase();
 
     // Duplication checks
-    const hasDuplicateName = users.some((u) => {
+    const hasDuplicateUsername = users.some((u) => {
       const uUsername = (u.username || "").trim().toLowerCase();
-      const uName = (u.name || "").trim().toLowerCase();
-      return uUsername === candidateUsername || uUsername === candidateRawName || (uName && uName === candidateRawName);
+      return uUsername === candidateUsername;
     });
 
     const hasDuplicateEmail = users.some((u) => {
@@ -166,12 +177,8 @@ export default function AdminDashboard() {
       return uEmail === candidateEmail;
     });
 
-    if (hasDuplicateName && hasDuplicateEmail) {
-      setError(`A user with name "${form.name.trim()}" and email "${form.email.trim()}" already exists.`);
-      return;
-    }
-    if (hasDuplicateName) {
-      setError(`Username or name "${form.name.trim()}" is already taken. Please choose a different name.`);
+    if (hasDuplicateUsername) {
+      setError(`Username "${cleanUsername}" is already taken. Please choose a different username.`);
       return;
     }
     if (hasDuplicateEmail) {
@@ -181,7 +188,7 @@ export default function AdminDashboard() {
 
     const payload = {
       name: form.name.trim(),
-      username: candidateUsername,
+      username: cleanUsername,
       email: form.email.trim(),
       password: form.password.trim(),
       role: form.role === "Team" ? "Teams" : "Officer",
@@ -193,7 +200,7 @@ export default function AdminDashboard() {
       ...payload,
     };
     setUsers((prev) => [...prev, optimisticUser]);
-    setForm({ name: "", email: "", password: "", role: "", department: "" });
+    setForm({ name: "", username: "", email: "", password: "", role: "", department: "" });
     setError("");
     setShowModal(false);
 
@@ -481,6 +488,18 @@ export default function AdminDashboard() {
               value={form.name}
               onChange={(e) => handleFormChange("name", e.target.value)}
               placeholder="Enter full name"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
+            />
+
+            <label htmlFor="new-user-username" className="block text-sm font-medium text-gray-700 mb-1">
+              Username <span className="text-xs text-gray-500 font-normal">(must be unique, no spaces)</span>
+            </label>
+            <input
+              type="text"
+              id="new-user-username"
+              value={form.username}
+              onChange={(e) => handleFormChange("username", e.target.value.replace(/\s+/g, ""))}
+              placeholder="e.g. rajesh_kumar"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 text-sm outline-none focus:border-[#171918] focus:ring-1 focus:ring-[#171918]"
             />
 

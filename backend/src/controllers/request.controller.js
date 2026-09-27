@@ -2,6 +2,7 @@
 const { fallbackStore } = require("../config/database");
 const { createRequest, reviewRequest, enrichRequestWithAgentPlan } = require("../services/request.service");
 const { persistLocalStore } = require("../services/local-store.service");
+const { sendWorkRequestApprovedEmail, sendWorkRequestCompletedEmail } = require("../services/email.service");
 
 async function getAllRequests(req, res, next) {
   try {
@@ -147,6 +148,46 @@ async function postReviewRequest(req, res, next) {
 
     const result = await reviewRequest(requestId, officerId, decision.toUpperCase(), feedback, alternative_id, prohibitedWindow, targetNewWindow);
 
+    if (decision.toUpperCase() === "APPROVED") {
+      const officer = req.user || fallbackStore.users.find((u) => u.id === officerId || u.role === "OFFICER");
+      const officerEmail = officer?.email;
+      const officerName = officer?.name || officer?.username || "Controlling Officer";
+
+      const targetReq = result.request || fallbackStore.maintenance_requests.find((r) => r.request_id === requestId);
+      if (targetReq) {
+        let engineer = fallbackStore.users.find(
+          (u) =>
+            (targetReq.created_by && u.id === targetReq.created_by) ||
+            (targetReq.created_by_username && u.username?.toLowerCase() === targetReq.created_by_username.toLowerCase()) ||
+            (targetReq.department && u.role === "ENGINEER" && u.department === targetReq.department)
+        );
+        if (!engineer) {
+          engineer = fallbackStore.users.find((u) => u.role === "ENGINEER");
+        }
+        const engineerEmail = engineer?.email;
+
+        // 1. Send confirmation to Officer
+        if (officerEmail) {
+          sendWorkRequestApprovedEmail({
+            to: officerEmail,
+            request: targetReq,
+            officerName,
+            feedback,
+          }).catch((err) => console.warn("[Email] Officer approval email error:", err.message));
+        }
+
+        // 2. Send notification to Engineer (if different from officer)
+        if (engineerEmail && engineerEmail !== officerEmail) {
+          sendWorkRequestApprovedEmail({
+            to: engineerEmail,
+            request: targetReq,
+            officerName,
+            feedback,
+          }).catch((err) => console.warn("[Email] Engineer approval email error:", err.message));
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: result,
@@ -199,6 +240,32 @@ async function completeWorkRequest(req, res, next) {
     });
 
     persistLocalStore(fallbackStore);
+
+    // Send email to Officer(s)
+    try {
+      const officerReviews = fallbackStore.request_reviews.filter((rv) => rv.request_id === requestId);
+      let officerEmail = null;
+      if (officerReviews.length > 0) {
+        const lastReview = officerReviews[officerReviews.length - 1];
+        const reviewingOfficer = fallbackStore.users.find((u) => u.id === lastReview.officer_id);
+        if (reviewingOfficer?.email) officerEmail = reviewingOfficer.email;
+      }
+      if (!officerEmail) {
+        const defaultOfficer = fallbackStore.users.find((u) => u.role === "OFFICER");
+        if (defaultOfficer?.email) officerEmail = defaultOfficer.email;
+      }
+
+      if (officerEmail) {
+        sendWorkRequestCompletedEmail({
+          to: officerEmail,
+          request,
+          engineerName: completionProof.completed_by,
+          completionProof,
+        }).catch((err) => console.warn("[Email] Work completed email error:", err.message));
+      }
+    } catch (e) {
+      console.warn("Work completion notification dispatch error:", e.message);
+    }
 
     res.json({
       success: true,

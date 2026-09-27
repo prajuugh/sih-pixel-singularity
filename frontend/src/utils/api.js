@@ -682,6 +682,7 @@ export async function createUser(form) {
       headers,
       body: JSON.stringify({
         name: form.name || form.username,
+        username: form.username,
         email: form.email,
         password: form.password,
         role: form.role,
@@ -713,5 +714,119 @@ export async function deleteUser(userId) {
     console.warn("deleteUser error:", err.message);
   }
   return { success: true };
+}
+
+// ---- Password Management & OTP Recovery ----
+
+export async function changePasswordApi({ username, current_password, new_password, confirm_password }) {
+  try {
+    const token = localStorage.getItem("rbps_token");
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(`${BASE_URL}/auth/change-password`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        username,
+        current_password,
+        new_password,
+        confirm_password,
+      }),
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success) {
+      return { success: true, message: json.message, data: json.data };
+    }
+    return {
+      success: false,
+      message: json?.error?.message || "Failed to change password.",
+      code: json?.error?.code,
+    };
+  } catch (err) {
+    return { success: false, message: err.message || "Network error. Please try again." };
+  }
+}
+
+export async function forgotPasswordApi(username) {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success) {
+      return {
+        success: true,
+        message: json.message,
+        emailMasked: json.emailMasked,
+      };
+    }
+    return {
+      success: false,
+      message: json?.error?.message || "Failed to request password reset code.",
+      retryAfter: json?.error?.retryAfter,
+      code: json?.error?.code,
+    };
+  } catch (err) {
+    return { success: false, message: err.message || "Network error. Please try again." };
+  }
+}
+
+export async function verifyOtpApi({ username, otp }) {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/verify-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, otp }),
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success) {
+      return {
+        success: true,
+        resetToken: json.resetToken,
+        message: json.message,
+      };
+    }
+    return {
+      success: false,
+      message: json?.error?.message || "Invalid verification code.",
+      attemptsRemaining: json?.error?.attemptsRemaining,
+      code: json?.error?.code,
+    };
+  } catch (err) {
+    return { success: false, message: err.message || "Network error. Please try again." };
+  }
+}
+
+export async function resetPasswordApi({ username, resetToken, new_password, confirm_password }) {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        resetToken,
+        new_password,
+        confirm_password,
+      }),
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success) {
+      return { success: true, message: json.message };
+    }
+    return {
+      success: false,
+      message: json?.error?.message || "Failed to reset password.",
+      code: json?.error?.code,
+    };
+  } catch (err) {
+    return { success: false, message: err.message || "Network error. Please try again." };
+  }
 }
 

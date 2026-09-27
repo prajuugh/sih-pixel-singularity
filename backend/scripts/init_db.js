@@ -67,13 +67,23 @@ async function initializeDatabase() {
 
   // Try DB queries to seed PostgreSQL if online
   try {
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS username varchar;").catch(() => null);
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_first_login boolean DEFAULT true;").catch(() => null);
+    await query("UPDATE users SET is_first_login = false WHERE LOWER(email) = 'admin@rbps.com';").catch(() => null);
+
     for (const u of seedData.users) {
       const existing = await query("SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [u.email]).catch(() => null);
       if (!existing || !existing.rows || existing.rows.length === 0) {
         await query(
-          `INSERT INTO users (name, email, password_hash, role, department) VALUES ($1, $2, $3, $4, $5);`,
-          [u.name, u.email, u.password_hash, u.role, u.department]
-        ).catch((e) => console.warn("Seed user insert notice:", e.message));
+          `INSERT INTO users (name, username, email, password_hash, role, department, is_first_login) VALUES ($1, $2, $3, $4, $5, $6, false);`,
+          [u.name, u.username || "admin", u.email, u.password_hash, u.role, u.department]
+        ).catch(async () => {
+          // Fallback if older table schema
+          await query(
+            `INSERT INTO users (name, email, password_hash, role, department) VALUES ($1, $2, $3, $4, $5);`,
+            [u.name, u.email, u.password_hash, u.role, u.department]
+          ).catch((e) => console.warn("Seed user insert notice:", e.message));
+        });
       }
     }
   } catch (err) {
