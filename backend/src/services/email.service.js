@@ -15,19 +15,32 @@ let transporter = null;
 function getTransporter() {
   if (!transporter && SMTP_HOST && SMTP_USER && SMTP_PASSWORD) {
     try {
-      transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_SECURE,
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASSWORD,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-      });
-      console.log(`📧 SMTP Transporter initialized with host: ${SMTP_HOST}:${SMTP_PORT}`);
+      const isGmail = SMTP_HOST.toLowerCase().includes("gmail");
+      const cleanPass = SMTP_PASSWORD.trim().replace(/\s+/g, "");
+
+      const transportConfig = isGmail
+        ? {
+            service: "gmail",
+            auth: {
+              user: SMTP_USER.trim(),
+              pass: cleanPass,
+            },
+          }
+        : {
+            host: SMTP_HOST,
+            port: SMTP_PORT,
+            secure: SMTP_SECURE,
+            auth: {
+              user: SMTP_USER.trim(),
+              pass: cleanPass,
+            },
+            tls: {
+              rejectUnauthorized: false,
+            },
+          };
+
+      transporter = nodemailer.createTransport(transportConfig);
+      console.log(`📧 SMTP Transporter initialized (${isGmail ? "Gmail Service" : `${SMTP_HOST}:${SMTP_PORT}`})`);
     } catch (err) {
       console.warn("Failed to initialize SMTP transporter:", err.message);
       transporter = null;
