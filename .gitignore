@@ -24,6 +24,7 @@ frontend/.env
 # Build outputs
 dist/
 build/
+!frontend/dist/
 *.log
 backend/data/runtime-store.json
 backend/data/runtime-store.json.tmp
