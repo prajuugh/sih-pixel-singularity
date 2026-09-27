@@ -25,20 +25,28 @@ function snapshotStore(store) {
 }
 
 function persistLocalStore(store) {
-  const directory = path.dirname(storePath);
-  const tempPath = `${storePath}.tmp`;
-  fs.mkdirSync(directory, { recursive: true });
-  const content = JSON.stringify(snapshotStore(store), null, 2);
   try {
-    fs.writeFileSync(tempPath, content, "utf8");
+    const directory = path.dirname(storePath);
+    const tempPath = `${storePath}.tmp`;
+    fs.mkdirSync(directory, { recursive: true });
+    const content = JSON.stringify(snapshotStore(store), null, 2);
     try {
-      fs.renameSync(tempPath, storePath);
-    } catch (e) {
-      fs.copyFileSync(tempPath, storePath);
-      try { fs.unlinkSync(tempPath); } catch (_) {}
+      fs.writeFileSync(tempPath, content, "utf8");
+      try {
+        fs.renameSync(tempPath, storePath);
+      } catch (e) {
+        fs.copyFileSync(tempPath, storePath);
+        try { fs.unlinkSync(tempPath); } catch (_) {}
+      }
+    } catch (innerErr) {
+      try {
+        fs.writeFileSync(storePath, content, "utf8");
+      } catch (fallbackErr) {
+        console.warn("[LocalStore] Disk write failed (continuing in-memory):", fallbackErr.message);
+      }
     }
   } catch (err) {
-    fs.writeFileSync(storePath, content, "utf8");
+    console.warn("[LocalStore] Failed to persist runtime store:", err.message);
   }
 }
 

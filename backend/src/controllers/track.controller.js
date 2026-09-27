@@ -1,6 +1,7 @@
 // backend/src/controllers/track.controller.js
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 const liveTrainService = require("../services/live-train");
 
 // ============================================================
@@ -223,10 +224,23 @@ function getSchedulesForSection(trackId) {
 async function getTracks(req, res, next) {
   try {
     const { scope } = req.query;
+    const filePath = scope === "karnataka" ? tracksPath : indiaTracksPath;
+
+    if (fs.existsSync(filePath)) {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+
+      const acceptEncoding = req.headers["accept-encoding"] || "";
+      if (acceptEncoding.includes("gzip")) {
+        res.setHeader("Content-Encoding", "gzip");
+        return fs.createReadStream(filePath).pipe(zlib.createGzip()).pipe(res);
+      }
+      return res.sendFile(filePath);
+    }
+
     if (scope === "karnataka") {
       return res.json(trackFeatureCollection);
     }
-    // Default to Pan-India (all zones)
     res.json(getIndiaTracks());
   } catch (err) {
     next(err);

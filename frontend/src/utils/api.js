@@ -275,7 +275,7 @@ export async function fetchTracks(scope = "india") {
     }
   } catch (e) {}
 
-  const fallbackResponse2 = await fetch("/railway_tracks.geojson");
+  const fallbackResponse2 = await fetch(LOCAL_TRACKS_URL);
   if (fallbackResponse2.ok) {
     const fallbackData2 = await fallbackResponse2.json();
     if (isTrackFeatureCollection(fallbackData2)) return fallbackData2;

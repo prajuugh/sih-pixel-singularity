@@ -33,3 +33,10 @@ backend/data/runtime-store.json.tmp
 # OS files
 .DS_Store
 Thumbs.db
+
+# Large raw downloads and duplicate geojson files
+backend/data/downloads/
+backend/data/india_railways_physical_tracks.geojson
+frontend/dist/railway_tracks.geojson
+frontend/public/railway_tracks.geojson
+*.zip
