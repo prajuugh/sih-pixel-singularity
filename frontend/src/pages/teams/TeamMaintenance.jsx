@@ -58,7 +58,8 @@ export default function TeamMaintenance() {
   // View Evidence Modal State
   const [viewEvidenceTask, setViewEvidenceTask] = useState(null);
 
-  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   const loadApprovedTasks = async () => {
     setLoading(true);
@@ -144,12 +145,13 @@ export default function TeamMaintenance() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setSelectedPhotoName(file.name);
+    setSelectedPhotoName(file.name || "site_proof_photo.jpg");
     const reader = new FileReader();
     reader.onload = (uploadEvent) => {
       setSelectedPhotoData(uploadEvent.target.result);
     };
     reader.readAsDataURL(file);
+    e.target.value = ""; // Reset file input so re-selecting same or new photo triggers properly
   };
 
   const handleUseSamplePhoto = () => {
@@ -569,29 +571,75 @@ export default function TeamMaintenance() {
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1.5 flex items-center justify-between">
                   <span>Site Photo Evidence (Required)</span>
-                  <span className="text-[11px] text-gray-500 font-normal">Supports Camera or Gallery</span>
+                  <span className="text-[11px] text-gray-500 font-normal">Direct Camera or Gallery</span>
                 </label>
 
+                {/* Direct Mobile/Device Camera Input */}
                 <input
                   type="file"
-                  ref={fileInputRef}
+                  ref={cameraInputRef}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                {/* Gallery / File Chooser Input */}
+                <input
+                  type="file"
+                  ref={galleryInputRef}
                   accept="image/*"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
 
                 {!selectedPhotoData ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded-xl p-6 text-center bg-gray-50 hover:bg-emerald-50/40 transition-all cursor-pointer group"
-                  >
-                    <div className="mx-auto size-12 rounded-full bg-white shadow-xs border border-gray-200 flex items-center justify-center text-gray-500 group-hover:text-emerald-600 group-hover:border-emerald-300 transition-colors">
-                      <Camera size={22} />
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Option 1: Live Camera Shutter */}
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-emerald-300 hover:border-emerald-600 bg-emerald-50/40 hover:bg-emerald-50/80 transition-all cursor-pointer group text-center"
+                      >
+                        <div className="size-11 rounded-full bg-white shadow-xs border border-emerald-200 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform mb-2">
+                          <Camera size={22} />
+                        </div>
+                        <span className="font-bold text-xs text-gray-900 group-hover:text-emerald-900">
+                          Take Photo (Camera)
+                        </span>
+                        <span className="text-[10px] text-gray-500 mt-0.5">
+                          Opens live mobile camera shutter
+                        </span>
+                      </button>
+
+                      {/* Option 2: Choose from Gallery / Files */}
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-blue-300 hover:border-blue-600 bg-blue-50/40 hover:bg-blue-50/80 transition-all cursor-pointer group text-center"
+                      >
+                        <div className="size-11 rounded-full bg-white shadow-xs border border-blue-200 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform mb-2">
+                          <ImageIcon size={22} />
+                        </div>
+                        <span className="font-bold text-xs text-gray-900 group-hover:text-blue-900">
+                          Choose from Gallery / Files
+                        </span>
+                        <span className="text-[10px] text-gray-500 mt-0.5">
+                          Pick from device photos & files
+                        </span>
+                      </button>
                     </div>
-                    <p className="mt-2 text-xs font-bold text-gray-800 group-hover:text-emerald-900">
-                      Click to choose photo from gallery or snap with camera
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">PNG, JPG, HEIC up to 25MB</p>
+
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={handleUseSamplePhoto}
+                        className="text-[11px] text-emerald-700 hover:text-emerald-900 font-semibold underline cursor-pointer"
+                      >
+                        Or use sample site photo for instant testing
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
@@ -607,21 +655,33 @@ export default function TeamMaintenance() {
                           setSelectedPhotoData(null);
                           setSelectedPhotoName("");
                         }}
-                        className="absolute top-2 right-2 rounded-full bg-black/70 hover:bg-black p-1 text-white transition-colors"
+                        className="absolute top-2 right-2 rounded-full bg-black/70 hover:bg-black p-1 text-white transition-colors cursor-pointer"
                         title="Remove photo"
                       >
                         <X size={16} />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-gray-600 px-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 px-1 pt-1">
                       <span className="font-semibold truncate max-w-xs">{selectedPhotoName}</span>
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="text-emerald-700 hover:text-emerald-900 font-bold underline"
-                      >
-                        Change Photo
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-bold cursor-pointer"
+                        >
+                          <Camera size={13} />
+                          <span>Retake (Camera)</span>
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => galleryInputRef.current?.click()}
+                          className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-bold cursor-pointer"
+                        >
+                          <ImageIcon size={13} />
+                          <span>Gallery</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

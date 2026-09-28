@@ -538,6 +538,53 @@ export default function LiveMap({ isSubmitDefault = false }) {
   const routeIntentRef = useRef(initialRouteIntent);
   const routeIntentHandledRef = useRef(false);
 
+  // Fast track feature lookup map (O(1)) for pan-India tracks
+  const trackByIdMap = useMemo(() => {
+    if (!tracks?.features) return new Map();
+    const map = new Map();
+    for (const f of tracks.features) {
+      const tid = (f.properties?.track_id || "").toUpperCase();
+      if (tid) map.set(tid, f);
+    }
+    return map;
+  }, [tracks]);
+
+  // All selected track features for multi-track highlighting overlay
+  const selectedTrackFeatures = useMemo(() => {
+    if (selectedRequestTracks.length === 0) {
+      return selectedTrack ? [selectedTrack] : [];
+    }
+    const list = [];
+    const seen = new Set();
+    for (const id of selectedRequestTracks) {
+      const norm = id.toUpperCase();
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      const feat = trackByIdMap.get(norm);
+      if (feat) list.push(feat);
+    }
+    if (selectedTrack && !seen.has((selectedTrack.properties?.track_id || "").toUpperCase())) {
+      list.push(selectedTrack);
+    }
+    return list;
+  }, [trackByIdMap, selectedRequestTracks, selectedTrack]);
+
+  // Keep fresh refs for Leaflet click events to avoid re-binding 97k layers
+  const selectedRequestTracksRef = useRef(selectedRequestTracks);
+  useEffect(() => {
+    selectedRequestTracksRef.current = selectedRequestTracks;
+  }, [selectedRequestTracks]);
+
+  const selectedTrackRef = useRef(selectedTrack);
+  useEffect(() => {
+    selectedTrackRef.current = selectedTrack;
+  }, [selectedTrack]);
+
+  const trackByIdMapRef = useRef(trackByIdMap);
+  useEffect(() => {
+    trackByIdMapRef.current = trackByIdMap;
+  }, [trackByIdMap]);
+
   // ----------------------------------------------------------
   // LOAD STATES GEOJSON FOR BORDER HIGHLIGHTING
   // ----------------------------------------------------------
@@ -968,21 +1015,40 @@ export default function LiveMap({ isSubmitDefault = false }) {
   // ----------------------------------------------------------
   // SUBMIT REQUEST TRACK SELECTION & FORM SUBMISSION
   // ----------------------------------------------------------
-  const handleToggleRequestTrack = (trackId, feature) => {
+  const handleTrackClickForRequest = (feature) => {
+    setSelectedOngoingWork(null);
+    const trackId = feature?.properties?.track_id;
     if (!trackId) return;
     const normId = trackId.toUpperCase();
-    setSelectedRequestTracks((prev) => {
-      const exists = prev.includes(normId);
-      if (exists) {
-        return prev.filter((id) => id !== normId);
-      } else {
-        return [...prev, normId];
+    const currentList = selectedRequestTracksRef.current || [];
+
+    if (currentList.includes(normId)) {
+      // Track is already selected: deselect/remove it
+      const nextList = currentList.filter((id) => id !== normId);
+      setSelectedRequestTracks(nextList);
+
+      if (nextList.length === 0) {
+        setSelectedTrack(null);
+      } else if (selectedTrackRef.current?.properties?.track_id?.toUpperCase() === normId) {
+        // If this track was currently being inspected, switch to another selected track
+        const remainingId = nextList[nextList.length - 1];
+        const nextFeat = trackByIdMapRef.current?.get(remainingId);
+        if (nextFeat) {
+          setSelectedTrack(nextFeat);
+          loadTrackDetails(nextFeat);
+        }
       }
-    });
-    setSelectedTrack(feature);
-    setIsSubmitDrawerOpen(true);
-    setSubmitSuccessId(null);
-    setSubmitReqError("");
+    } else {
+      // Add track to selection
+      setSelectedRequestTracks([...currentList, normId]);
+      setSelectedTrack(feature);
+      setRequestStep(1);
+      loadTrackDetails(feature);
+    }
+  };
+
+  const handleToggleRequestTrack = (trackId, feature) => {
+    handleTrackClickForRequest(feature);
   };
 
   const handleFormSubmit = async (e) => {
@@ -1063,14 +1129,11 @@ export default function LiveMap({ isSubmitDefault = false }) {
       const fromStn = feature.properties?.from_station_name || feature.properties?.from_station || "";
       const toStn = feature.properties?.to_station_name || feature.properties?.to_station || "";
       const stnText = fromStn && toStn ? `<br/><span style="color:#2563eb;">${fromStn} ↔ ${toStn}</span>` : "";
-      layer.bindTooltip(`<strong>${trackId}</strong>${stnText}<br/><span style="color:#059669;font-weight:bold;">✓ Click to inspect trains & request</span>`, { sticky: true, className: "track-tooltip" });
+      layer.bindTooltip(`<strong>${trackId}</strong>${stnText}<br/><span style="color:#059669;font-weight:bold;">✓ Click to select/deselect (Multi-track)</span>`, { sticky: true, className: "track-tooltip" });
 
       layer.on({
         click: () => {
-          setSelectedOngoingWork(null);
-          setSelectedRequestTracks([trackId.toUpperCase()]);
-          setRequestStep(1); // Step 1: Trains
-          loadTrackDetails(feature);
+          handleTrackClickForRequest(feature);
         },
       });
     }
@@ -1094,7 +1157,11 @@ export default function LiveMap({ isSubmitDefault = false }) {
     }
 
     setSearchError("");
-    loadTrackDetails(feature);
+    if (isEngineer) {
+      handleTrackClickForRequest(feature);
+    } else {
+      loadTrackDetails(feature);
+    }
   };
 
   const validAgentAlternatives = useMemo(
@@ -1365,25 +1432,46 @@ export default function LiveMap({ isSubmitDefault = false }) {
                     </div>
                     <div>
                       <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                        <span>Selected Track Section</span>
+                        <span>Selected Track Section{selectedRequestTracks.length > 1 ? "s" : ""}</span>
                         <span className="text-emerald-400">•</span>
-                        <span className="font-mono">{selectedTrack.properties.section_id || selectedTrack.properties.track_id}</span>
+                        <span className="font-mono bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded font-extrabold">
+                          {selectedRequestTracks.length} Track{selectedRequestTracks.length > 1 ? "s" : ""} Selected
+                        </span>
                       </div>
-                      <h2 className="text-lg font-bold text-gray-900 mt-0.5">
-                        {(selectedTrack.properties.from_station || selectedTrack.properties.from_station_name) ? (
-                          <>
-                            {selectedTrack.properties.from_station_name || selectedTrack.properties.from_station}{" "}
-                            <span className="text-gray-400 font-normal">↔</span>{" "}
-                            {selectedTrack.properties.to_station_name || selectedTrack.properties.to_station}
-                          </>
-                        ) : (
-                          selectedTrack.properties.section_id || selectedTrack.properties.track_id
-                        )}
-                      </h2>
-                      <div className="text-xs text-gray-600 mt-1 flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        {selectedRequestTracks.map((tId) => (
+                          <span
+                            key={tId}
+                            className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-950 px-2.5 py-1 rounded-lg text-xs font-mono font-bold shadow-2xs"
+                          >
+                            <span>{tId}</span>
+                            {selectedRequestTracks.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextList = selectedRequestTracks.filter((id) => id.toUpperCase() !== tId.toUpperCase());
+                                  setSelectedRequestTracks(nextList);
+                                  if ((selectedTrack?.properties?.track_id || "").toUpperCase() === tId.toUpperCase()) {
+                                    const nextFeat = trackByIdMap.get(nextList[nextList.length - 1]);
+                                    if (nextFeat) {
+                                      setSelectedTrack(nextFeat);
+                                      loadTrackDetails(nextFeat);
+                                    }
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-red-600 cursor-pointer p-0.5 transition-colors"
+                                title="Remove track from request"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-xs text-gray-600 mt-2 flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                           <Clock size={12} />
-                          {getEstimatedTrainsForTrack(selectedTrack, schedules).length} trains scheduled on this section
+                          {getEstimatedTrainsForTrack(selectedTrack, schedules).length} trains scheduled on active section
                         </span>
                         {selectedTrack.properties.state && (
                           <span className="text-gray-500 font-medium">State: {selectedTrack.properties.state}</span>
@@ -1398,7 +1486,7 @@ export default function LiveMap({ isSubmitDefault = false }) {
                     className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
                   >
                     <Route size={14} />
-                    <span>Review Trains on Track</span>
+                    <span>+ Add / Modify Tracks on Map</span>
                   </button>
                 </div>
 
@@ -1673,7 +1761,7 @@ export default function LiveMap({ isSubmitDefault = false }) {
                         ) : (
                           <>
                             <Send size={15} />
-                            <span>Submit Maintenance Request</span>
+                            <span>Submit Maintenance Request ({selectedRequestTracks.length} Track{selectedRequestTracks.length > 1 ? "s" : ""})</span>
                           </>
                         )}
                       </button>
@@ -2042,25 +2130,32 @@ export default function LiveMap({ isSubmitDefault = false }) {
                 )}
 
 
-                {/* ── SELECTED TRACK INSTANT HIGHLIGHT OVERLAY (0ms Overhead) ── */}
-                {selectedTrack && selectedTrack.geometry?.coordinates && (
-                  <Polyline
-                    positions={
-                      selectedTrack.geometry.type === "LineString"
-                        ? selectedTrack.geometry.coordinates.map((c) => [c[1], c[0]])
-                        : selectedTrack.geometry.coordinates.flatMap((line) =>
-                            Array.isArray(line[0]) ? line.map((c) => [c[1], c[0]]) : [line[1], line[0]]
-                          )
-                    }
-                    pathOptions={{
-                      color: "#f59e0b",
-                      weight: 7,
-                      opacity: 1,
-                      lineCap: "round",
-                      lineJoin: "round",
-                    }}
-                  />
-                )}
+                {/* ── MULTI-TRACK SELECTION INSTANT HIGHLIGHT OVERLAYS (0ms Overhead) ── */}
+                {selectedTrackFeatures.map((feat) => {
+                  const featTrackId = feat.properties?.track_id;
+                  const isInspected = featTrackId?.toUpperCase() === selectedTrack?.properties?.track_id?.toUpperCase();
+                  const coords = feat.geometry?.coordinates;
+                  if (!coords) return null;
+                  const positions =
+                    feat.geometry.type === "LineString"
+                      ? coords.map((c) => [c[1], c[0]])
+                      : coords.flatMap((line) =>
+                          Array.isArray(line[0]) ? line.map((c) => [c[1], c[0]]) : [line[1], line[0]]
+                        );
+                  return (
+                    <Polyline
+                      key={`sel-track-ovl-${featTrackId}`}
+                      positions={positions}
+                      pathOptions={{
+                        color: isInspected ? "#f59e0b" : "#10b981", // Amber for active inspected track, emerald green for other selected tracks
+                        weight: isInspected ? 8 : 6,
+                        opacity: 1,
+                        lineCap: "round",
+                        lineJoin: "round",
+                      }}
+                    />
+                  );
+                })}
 
                 {/* ── HIGHLIGHTED STATE BOUNDARY (PURPLE BORDER + SUBTLE VIOLET TINT) ── */}
                 {selectedStateFeature && (
@@ -2210,11 +2305,9 @@ export default function LiveMap({ isSubmitDefault = false }) {
                   <span className="leading-tight">
                     {selectedOngoingWork
                       ? `Viewing possession details on ${selectedOngoingWork.trackId}`
-                      : selectedTrack
-                      ? requestStep === 1
-                        ? `Inspecting train traffic on ${selectedTrack.properties.section_id || selectedTrack.properties.track_id}. Click Next to submit.`
-                        : `Complete request details for ${selectedTrack.properties.section_id || selectedTrack.properties.track_id}.`
-                      : "Click any track to view scheduled trains & submit request. Orange tracks are your work, red tracks are other maintenance."}
+                      : selectedRequestTracks.length > 0
+                      ? `${selectedRequestTracks.length} track${selectedRequestTracks.length > 1 ? "s" : ""} selected (${selectedRequestTracks.join(", ")}). Click other tracks to add/remove, or click "Next" in the drawer.`
+                      : "Click any track to select for maintenance request (Multi-track selection enabled)."}
                   </span>
                 </div>
               )}
@@ -2405,6 +2498,11 @@ export default function LiveMap({ isSubmitDefault = false }) {
                             <span>Step 1 of 2</span>
                             <span>•</span>
                             <span>Track Traffic Inspection</span>
+                            {selectedRequestTracks.length > 1 && (
+                              <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-extrabold ml-1 border border-emerald-500/30">
+                                {selectedRequestTracks.length} Selected
+                              </span>
+                            )}
                           </div>
                           <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
                             <Train size={15} className="text-emerald-400" />
@@ -2425,6 +2523,69 @@ export default function LiveMap({ isSubmitDefault = false }) {
                           <X size={16} />
                         </button>
                       </div>
+
+                      {/* MULTI-TRACK SELECTION BAR */}
+                      {selectedRequestTracks.length > 0 && (
+                        <div className="bg-slate-900 border-b border-slate-800 px-3.5 py-2.5 shrink-0">
+                          <div className="flex items-center justify-between text-[11px] text-gray-300 mb-1.5">
+                            <span className="font-bold flex items-center gap-1 text-emerald-400">
+                              <Route size={12} />
+                              <span>Selected Tracks ({selectedRequestTracks.length}):</span>
+                            </span>
+                            <span className="text-[10px] text-gray-400">Click track on map to add/remove</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                            {selectedRequestTracks.map((trkId) => {
+                              const isCurrent = (selectedTrack?.properties?.track_id || "").toUpperCase() === trkId.toUpperCase();
+                              return (
+                                <span
+                                  key={trkId}
+                                  className={`inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md border transition-all ${
+                                    isCurrent
+                                      ? "bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold ring-1 ring-amber-500/40"
+                                      : "bg-slate-800 text-gray-200 border-slate-700 hover:bg-slate-700"
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const feat = trackByIdMap.get(trkId.toUpperCase());
+                                      if (feat) {
+                                        setSelectedTrack(feat);
+                                        loadTrackDetails(feat);
+                                      }
+                                    }}
+                                    className="hover:underline cursor-pointer"
+                                    title="Click to view train schedule for this track"
+                                  >
+                                    {trkId}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextList = selectedRequestTracks.filter((id) => id.toUpperCase() !== trkId.toUpperCase());
+                                      setSelectedRequestTracks(nextList);
+                                      if (nextList.length === 0) {
+                                        setSelectedTrack(null);
+                                      } else if (isCurrent) {
+                                        const nextFeat = trackByIdMap.get(nextList[nextList.length - 1].toUpperCase());
+                                        if (nextFeat) {
+                                          setSelectedTrack(nextFeat);
+                                          loadTrackDetails(nextFeat);
+                                        }
+                                      }
+                                    }}
+                                    className="text-gray-400 hover:text-red-400 p-0.5 transition-colors cursor-pointer"
+                                    title="Remove track"
+                                  >
+                                    <X size={11} />
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Subheader Banner with Traffic Filter */}
                       {(() => {
@@ -2592,7 +2753,7 @@ export default function LiveMap({ isSubmitDefault = false }) {
                           onClick={() => setRequestStep(2)}
                           className="w-full py-3 bg-[#b83825] hover:bg-[#8f2c1f] text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]"
                         >
-                          <span>Next: Specify Work Details</span>
+                          <span>Next: Specify Work Details ({selectedRequestTracks.length} Track{selectedRequestTracks.length > 1 ? "s" : ""})</span>
                           <ArrowRight size={15} />
                         </button>
                       </div>
