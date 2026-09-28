@@ -30,6 +30,42 @@ import { useAuth } from "../../hooks/useAuth";
 // Default realistic sample railway maintenance site photo (encoded for instant test on desktop)
 const SAMPLE_SITE_PHOTO = "https://images.unsplash.com/photo-1541427468627-a89a96e5ca1d?auto=format&fit=crop&w=1200&q=80";
 
+function compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.75) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressedDataUrl);
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function TeamMaintenance() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -141,16 +177,21 @@ export default function TeamMaintenance() {
     );
   };
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setSelectedPhotoName(file.name || "site_proof_photo.jpg");
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      setSelectedPhotoData(uploadEvent.target.result);
-    };
-    reader.readAsDataURL(file);
+    setSelectedPhotoName(file.name ? file.name.replace(/\.[^/.]+$/, ".jpg") : "site_proof_photo.jpg");
+    try {
+      const compressed = await compressImage(file);
+      if (compressed) {
+        setSelectedPhotoData(compressed);
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => setSelectedPhotoData(uploadEvent.target.result);
+      reader.readAsDataURL(file);
+    }
     e.target.value = ""; // Reset file input so re-selecting same or new photo triggers properly
   };
 
