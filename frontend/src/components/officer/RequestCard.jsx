@@ -222,6 +222,10 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
     request.status === "VERIFIED" ||
     request.raw?.status === "VERIFIED"
   );
+  const isApproved = Boolean(
+    ["APPROVED", "Approved"].includes(request.status) ||
+    ["APPROVED", "Approved"].includes(request.raw?.status)
+  );
 
   const handleVerifyWork = async () => {
     setVerifying(true);
@@ -424,6 +428,11 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
                   <CheckCircle2 size={16} className="text-emerald-600" /> Track Safe & Restored
                 </div>
               )}
+            </div>
+          ) : isApproved ? (
+            <div className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-300 px-4 text-sm font-semibold text-emerald-800">
+              <CheckCircle2 size={17} className="text-emerald-600" />
+              Approved & Released
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:flex">
