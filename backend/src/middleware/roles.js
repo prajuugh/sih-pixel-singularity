@@ -8,10 +8,15 @@ function requireRole(...allowedRoles) {
       });
     }
 
-    const userRole = (req.user.role || "").toUpperCase();
-    const normalizedAllowed = allowedRoles.map(r => r.toUpperCase());
+    const userRole = (req.user.role || "").toUpperCase().trim();
+    const normalizedAllowed = allowedRoles.map((r) => r.toUpperCase().trim());
 
-    if (!normalizedAllowed.includes(userRole) && userRole !== "ADMIN") {
+    const isAllowed =
+      userRole === "ADMIN" ||
+      normalizedAllowed.includes(userRole) ||
+      normalizedAllowed.some((r) => userRole.includes(r) || (r === "OFFICER" && userRole.endsWith("OFFICER")));
+
+    if (!isAllowed) {
       return res.status(403).json({
         success: false,
         error: {

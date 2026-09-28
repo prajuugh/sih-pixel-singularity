@@ -200,7 +200,7 @@ export async function submitRequest(payload) {
 export async function updateRequestStatus(requestId, status, decision = "APPROVED", feedback = "", alternativeId = null, prohibitedWindow = null, newWindow = null) {
   try {
     const headers = getAuthHeaders("OFFICER");
-    const res = await fetch(`${BASE_URL}/requests/${requestId}/review`, {
+    const res = await fetch(`${BASE_URL}/requests/${encodeURIComponent(requestId)}/review`, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -215,10 +215,18 @@ export async function updateRequestStatus(requestId, status, decision = "APPROVE
       const json = await res.json();
       return { success: true, data: json.data };
     }
+    const errorBody = await res.json().catch(() => null);
+    return {
+      success: false,
+      message: errorBody?.error?.message || `Review request failed (${res.status})`,
+    };
   } catch (err) {
-    console.warn("Backend status update offline, falling back:", err.message);
+    console.warn("Backend status update offline, error:", err.message);
+    return {
+      success: false,
+      message: err.message || "Failed to reach server to update request status",
+    };
   }
-  return delay({ success: true });
 }
 
 export async function submitWorkCompletion(requestId, completionData) {

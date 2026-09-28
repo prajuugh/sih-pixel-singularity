@@ -36,8 +36,10 @@ async function getAllRequests(req, res, next) {
 async function getRequestById(req, res, next) {
   try {
     const { requestId } = req.params;
+    const normReqId = String(requestId || "").trim().toUpperCase();
     const request = fallbackStore.maintenance_requests.find(
-      (r) => r.request_id === requestId || String(r.id) === String(requestId)
+      (r) => (r.request_id && r.request_id.toUpperCase() === normReqId) ||
+             String(r.id).trim().toUpperCase() === normReqId
     );
 
     if (!request) {
@@ -48,8 +50,12 @@ async function getRequestById(req, res, next) {
     }
 
     await enrichRequestWithAgentPlan(request);
-    const reviews = fallbackStore.request_reviews.filter((rv) => rv.request_id === requestId);
-    const alternatives = fallbackStore.planning_alternatives.filter((a) => a.request_id === requestId);
+    const reviews = fallbackStore.request_reviews.filter(
+      (rv) => (rv.request_id && rv.request_id.toUpperCase() === normReqId) || String(rv.request_id) === String(requestId)
+    );
+    const alternatives = fallbackStore.planning_alternatives.filter(
+      (a) => (a.request_id && a.request_id.toUpperCase() === normReqId) || String(a.request_id) === String(requestId)
+    );
 
     res.json({
       success: true,
@@ -81,8 +87,10 @@ async function postCreateRequest(req, res, next) {
 async function submitRequest(req, res, next) {
   try {
     const { requestId } = req.params;
+    const normReqId = String(requestId || "").trim().toUpperCase();
     const request = fallbackStore.maintenance_requests.find(
-      (r) => r.request_id === requestId || String(r.id) === String(requestId)
+      (r) => (r.request_id && r.request_id.toUpperCase() === normReqId) ||
+             String(r.id).trim().toUpperCase() === normReqId
     );
 
     if (!request) {
@@ -109,6 +117,7 @@ async function submitRequest(req, res, next) {
 async function postReviewRequest(req, res, next) {
   try {
     const { requestId } = req.params;
+    const normReqId = String(requestId || "").trim().toUpperCase();
     const officerId = req.user ? req.user.id : 2;
     const { decision, feedback, alternative_id, prohibited_window, prohibitedStartTime, prohibitedEndTime, new_window, newWindow } = req.body;
 
@@ -121,7 +130,8 @@ async function postReviewRequest(req, res, next) {
 
     if (decision.toUpperCase() === "VERIFIED" || decision.toUpperCase() === "VERIFY_COMPLETED") {
       const request = fallbackStore.maintenance_requests.find(
-        (r) => r.request_id === requestId || String(r.id) === String(requestId)
+        (r) => (r.request_id && r.request_id.toUpperCase() === normReqId) ||
+               String(r.id).trim().toUpperCase() === normReqId
       );
       if (!request) {
         return res.status(404).json({ success: false, error: { code: "REQUEST_NOT_FOUND", message: `Request ${requestId} not found` } });
@@ -153,7 +163,10 @@ async function postReviewRequest(req, res, next) {
       const officerEmail = officer?.email;
       const officerName = officer?.name || officer?.username || "Controlling Officer";
 
-      const targetReq = result.request || fallbackStore.maintenance_requests.find((r) => r.request_id === requestId);
+      const targetReq = result.request || fallbackStore.maintenance_requests.find(
+        (r) => (r.request_id && r.request_id.toUpperCase() === normReqId) ||
+               String(r.id).trim().toUpperCase() === normReqId
+      );
       if (targetReq) {
         let engineer = fallbackStore.users.find(
           (u) =>
@@ -200,8 +213,10 @@ async function postReviewRequest(req, res, next) {
 async function completeWorkRequest(req, res, next) {
   try {
     const { requestId } = req.params;
+    const normReqId = String(requestId || "").trim().toUpperCase();
     const request = fallbackStore.maintenance_requests.find(
-      (r) => r.request_id === requestId || String(r.id) === String(requestId)
+      (r) => (r.request_id && r.request_id.toUpperCase() === normReqId) ||
+             String(r.id).trim().toUpperCase() === normReqId
     );
 
     if (!request) {
@@ -243,7 +258,9 @@ async function completeWorkRequest(req, res, next) {
 
     // Send email to Officer(s)
     try {
-      const officerReviews = fallbackStore.request_reviews.filter((rv) => rv.request_id === requestId);
+      const officerReviews = fallbackStore.request_reviews.filter(
+        (rv) => (rv.request_id && rv.request_id.toUpperCase() === normReqId) || String(rv.request_id) === String(requestId)
+      );
       let officerEmail = null;
       if (officerReviews.length > 0) {
         const lastReview = officerReviews[officerReviews.length - 1];

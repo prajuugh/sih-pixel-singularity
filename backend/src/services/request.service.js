@@ -205,28 +205,22 @@ async function createRequest(userId, payload) {
 }
 
 async function reviewRequest(requestId, officerId, decision, feedback, alternativeId = null, prohibitedWindow = null, newWindow = null) {
+  const normReqId = String(requestId || "").trim().toUpperCase();
   const req = fallbackStore.maintenance_requests.find(
-    (r) => r.request_id === requestId || String(r.id) === String(requestId)
+    (r) => (r.request_id && r.request_id.toUpperCase() === normReqId) ||
+           String(r.id).trim().toUpperCase() === normReqId
   );
   if (!req) {
     throw { statusCode: 404, code: "REQUEST_NOT_FOUND", message: `Request ${requestId} not found` };
   }
 
-  if (
-    decision === "APPROVED" &&
-    req.agent_plan?.schemaVersion === "2.0" &&
-    req.agent_plan?.verification?.passed !== true
-  ) {
-    throw {
-      statusCode: 409,
-      code: "PLAN_NOT_VERIFIED",
-      message: "This plan cannot be approved because hard-constraint verification did not pass.",
-    };
-  }
-
   // Update request status based on officer decision
   if (decision === "APPROVED") {
     req.status = "APPROVED";
+    // If the automated AI verification had warnings/conflicts, record official officer override
+    if (req.agent_plan?.verification?.passed !== true) {
+      req.officer_override = true;
+    }
   } else if (decision === "REJECTED") {
     req.status = "REJECTED";
   } else if (decision === "REVISION_REQUIRED") {
@@ -371,8 +365,9 @@ async function reviewRequest(requestId, officerId, decision, feedback, alternati
   // If officer selected an alternative, apply it to the scheduled block
   if (alternativeId) {
     const chosenAlt = fallbackStore.planning_alternatives.find(
-      (a) => (a.id === Number(alternativeId) || a.alternative_type === alternativeId) && a.request_id === requestId
-    ) || (req.alternatives && req.alternatives.find((a) => a.id === Number(alternativeId) || a.type === alternativeId));
+      (a) => (String(a.id) === String(alternativeId) || a.alternative_type?.toUpperCase() === String(alternativeId).toUpperCase()) &&
+             a.request_id?.toUpperCase() === normReqId
+    ) || (req.alternatives && req.alternatives.find((a) => String(a.id) === String(alternativeId) || a.type?.toUpperCase() === String(alternativeId).toUpperCase()));
 
     if (chosenAlt) {
       req.selected_alternative = chosenAlt;

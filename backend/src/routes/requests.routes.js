@@ -17,6 +17,6 @@ router.get("/:requestId", requireAuth, getRequestById);
 router.post("/", requireAuth, requireRole("ADMIN", "TEAMS"), postCreateRequest);
 router.post("/:requestId/submit", requireAuth, submitRequest);
 router.post("/:requestId/complete", requireAuth, completeWorkRequest);
-router.post("/:requestId/review", requireAuth, requireRole("OFFICER"), postReviewRequest);
+router.post("/:requestId/review", requireAuth, requireRole("OFFICER", "ADMIN"), postReviewRequest);
 
 module.exports = router;

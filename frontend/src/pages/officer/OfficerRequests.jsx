@@ -87,28 +87,44 @@ export default function OfficerRequests() {
       VERIFY_COMPLETED: "Completed",
     };
     const newStatus = statusMap[decisionType] || decisionType;
-    const result = await updateRequestStatus(request.id, newStatus, decisionType, feedback, alternativeId, prohibitedWindow, newWindow);
+    const reqId = request.id || request.raw?.request_id || request.raw?.id;
 
-    if (result?.data?.request) {
-      const updated = result.data.request;
-      setRequests((previous) => previous.map((item) => item.id === request.id ? {
-        ...item,
-        status: updated.status === "REVISION_REQUIRED" ? "AI Processing" : (statusMap[updated.status] || updated.status),
-        reason: updated.officer_feedback || feedback,
-        agentPlan: updated.agent_plan,
-        priorityScore: updated.priority_score ?? updated.agent_plan?.priorityScore ?? item.priorityScore,
-        conflict: updated.conflict !== undefined ? updated.conflict : item.conflict,
-        conflictingTrains: updated.conflicting_trains || updated.agent_plan?.conflictingTrains || [],
-        recommendedBlock: updated.recommended_block || updated.agent_plan?.recommendedBlock || item.recommendedBlock,
-        aiExplanation: updated.ai_explanation || updated.agent_plan?.explanation || item.aiExplanation,
-        alternatives: updated.alternatives || updated.agent_plan?.alternatives || item.alternatives,
-        completionProof: updated.completion_proof || item.completionProof,
-        raw: updated,
-        prohibitedWindow: updated.prohibited_window || prohibitedWindow,
-      } : item));
-      return;
+    try {
+      const result = await updateRequestStatus(reqId, newStatus, decisionType, feedback, alternativeId, prohibitedWindow, newWindow);
+
+      if (result?.success && result?.data?.request) {
+        const updated = result.data.request;
+        setRequests((previous) => previous.map((item) => (item.id === request.id || item.id === reqId) ? {
+          ...item,
+          status: updated.status === "REVISION_REQUIRED" ? "AI Processing" : (statusMap[updated.status] || updated.status),
+          reason: updated.officer_feedback || feedback,
+          agentPlan: updated.agent_plan,
+          priorityScore: updated.priority_score ?? updated.agent_plan?.priorityScore ?? item.priorityScore,
+          conflict: updated.conflict !== undefined ? updated.conflict : item.conflict,
+          conflictingTrains: updated.conflicting_trains || updated.agent_plan?.conflictingTrains || [],
+          recommendedBlock: updated.recommended_block || updated.agent_plan?.recommendedBlock || item.recommendedBlock,
+          aiExplanation: updated.ai_explanation || updated.agent_plan?.explanation || item.aiExplanation,
+          alternatives: updated.alternatives || updated.agent_plan?.alternatives || item.alternatives,
+          completionProof: updated.completion_proof || item.completionProof,
+          raw: updated,
+          prohibitedWindow: updated.prohibited_window || prohibitedWindow,
+        } : item));
+
+        // Immediately sync from backend so any periodic poll or refresh stays identical
+        const freshList = await fetchRequests();
+        if (Array.isArray(freshList)) {
+          setRequests(freshList);
+        }
+        return { success: true };
+      } else {
+        const errMsg = result?.message || "Failed to update request status on server.";
+        alert(`Error updating request: ${errMsg}`);
+        return { success: false, message: errMsg };
+      }
+    } catch (err) {
+      alert(`Unexpected error: ${err.message}`);
+      return { success: false, message: err.message };
     }
-    setRequests((previous) => previous.map((item) => item.id === request.id ? { ...item, status: newStatus, reason: feedback, prohibitedWindow } : item));
   };
 
   const counts = useMemo(() => {
