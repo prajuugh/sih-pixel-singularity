@@ -39,6 +39,11 @@ import { evaluateDiversionPassivity } from "../../utils/trainTractionHelper";
 import { getScheduledFreightForTrack } from "../../utils/scheduledFreightHelper";
 import { isFreightTrain } from "../../utils/trafficClassification";
 
+// Increase click tolerance for canvas layers so lines are effortless to click
+if (typeof window !== "undefined" && L && L.Canvas) {
+  L.Canvas.prototype.options.tolerance = 10;
+}
+
 // ============================================================
 // BASE URL & POPULAR TRUNK CORRIDORS
 // ============================================================
@@ -338,6 +343,8 @@ export default function LiveMap({ isSubmitDefault = false }) {
   const [idCopied, setIdCopied] = useState(false);
   const [submittingReq, setSubmittingReq] = useState(false);
   const [submitReqError, setSubmitReqError] = useState("");
+  const [quickTrackInput, setQuickTrackInput] = useState("");
+  const [quickTrackMsg, setQuickTrackMsg] = useState("");
 
   // Helper to format or synthesize estimated scheduled train passage times (Passenger & Freight)
   const getEstimatedTrainsForTrack = (feature, serverSchedules) => {
@@ -585,6 +592,34 @@ export default function LiveMap({ isSubmitDefault = false }) {
     trackByIdMapRef.current = trackByIdMap;
   }, [trackByIdMap]);
 
+  // Connected / adjacent railway sections sharing stations with selectedTrack
+  const connectedTracks = useMemo(() => {
+    if (!selectedTrack || !tracks?.features) return [];
+    const fromStn = (selectedTrack.properties?.from_station || "").toUpperCase();
+    const toStn = (selectedTrack.properties?.to_station || "").toUpperCase();
+    const currentId = (selectedTrack.properties?.track_id || "").toUpperCase();
+    if (!fromStn && !toStn) return [];
+
+    const results = [];
+    const seen = new Set([currentId]);
+
+    for (const f of tracks.features) {
+      const tid = (f.properties?.track_id || "").toUpperCase();
+      if (seen.has(tid)) continue;
+      const fFrom = (f.properties?.from_station || "").toUpperCase();
+      const fTo = (f.properties?.to_station || "").toUpperCase();
+      if (
+        (fromStn && (fFrom === fromStn || fTo === fromStn)) ||
+        (toStn && (fFrom === toStn || fTo === toStn))
+      ) {
+        seen.add(tid);
+        results.push(f);
+        if (results.length >= 8) break;
+      }
+    }
+    return results;
+  }, [selectedTrack, tracks]);
+
   // ----------------------------------------------------------
   // LOAD STATES GEOJSON FOR BORDER HIGHLIGHTING
   // ----------------------------------------------------------
@@ -752,8 +787,8 @@ export default function LiveMap({ isSubmitDefault = false }) {
     // Physical Railway Network Lines for Engineer (restored back to standard railway blue)
     return {
       color: "#2563eb",
-      weight: 2.2,
-      opacity: 0.65,
+      weight: 3.5,
+      opacity: 0.75,
     };
   };
 
@@ -2122,7 +2157,7 @@ export default function LiveMap({ isSubmitDefault = false }) {
                 {tracks && (
                   <GeoJSON
                     ref={geoJsonRef}
-                    key={`${networkScope}-${tracks.features.length}-${selectedTrack?.properties?.track_id}-${requests.length}`}
+                    key={`${networkScope}-${tracks.features.length}-${requests.length}`}
                     data={tracks}
                     style={trackStyle}
                     onEachFeature={onEachTrack}
@@ -2584,6 +2619,76 @@ export default function LiveMap({ isSubmitDefault = false }) {
                               );
                             })}
                           </div>
+
+                          {/* Connected Sections Quick-Add */}
+                          {connectedTracks.length > 0 && (
+                            <div className="mt-2.5 pt-2 border-t border-slate-800">
+                              <span className="text-[10px] text-gray-400 font-semibold block mb-1">
+                                Adjacent / Connected Sections (Click + to add):
+                              </span>
+                              <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                                {connectedTracks.map((connFeat) => {
+                                  const cId = connFeat.properties?.track_id;
+                                  const isAdded = selectedRequestTracks.includes(cId?.toUpperCase());
+                                  const fromN = connFeat.properties?.from_station_name || connFeat.properties?.from_station || "";
+                                  const toN = connFeat.properties?.to_station_name || connFeat.properties?.to_station || "";
+                                  return (
+                                    <button
+                                      key={cId}
+                                      type="button"
+                                      onClick={() => handleTrackClickForRequest(connFeat)}
+                                      className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                                        isAdded
+                                          ? "bg-emerald-950 text-emerald-300 border-emerald-500 font-bold"
+                                          : "bg-slate-800 hover:bg-slate-700 text-gray-300 border-slate-700"
+                                      }`}
+                                    >
+                                      <span className="font-bold text-xs">{isAdded ? "✓" : "+"}</span>
+                                      <span className="font-mono">{cId}</span>
+                                      {fromN && toN && <span className="text-gray-400 text-[9px]">({fromN}↔{toN})</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Quick Add Track by ID */}
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const query = quickTrackInput.trim().toUpperCase();
+                              if (!query) return;
+                              const feat = trackByIdMap.get(query);
+                              if (feat) {
+                                handleTrackClickForRequest(feat);
+                                setQuickTrackInput("");
+                                setQuickTrackMsg("");
+                              } else {
+                                setQuickTrackMsg(`"${query}" not found`);
+                                setTimeout(() => setQuickTrackMsg(""), 3000);
+                              }
+                            }}
+                            className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-1.5"
+                          >
+                            <input
+                              type="text"
+                              placeholder="Type Track ID to add (e.g. SEC-...)"
+                              value={quickTrackInput}
+                              onChange={(e) => setQuickTrackInput(e.target.value)}
+                              className="flex-1 bg-slate-800 border border-slate-700 text-white placeholder-gray-500 text-[10px] px-2 py-1 rounded focus:outline-none focus:border-emerald-500 font-mono"
+                            />
+                            <button
+                              type="submit"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Plus size={11} />
+                              <span>Add</span>
+                            </button>
+                            {quickTrackMsg && (
+                              <span className="text-red-400 text-[10px]">{quickTrackMsg}</span>
+                            )}
+                          </form>
                         </div>
                       )}
 
