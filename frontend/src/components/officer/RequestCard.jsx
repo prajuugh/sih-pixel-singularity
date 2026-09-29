@@ -135,6 +135,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
   const selectedAlternative = alternatives.find((option) => option.id === selectedAltId || option.type === selectedAltId);
   const trackIds = request.raw?.track_ids?.length ? request.raw.track_ids : [request.raw?.track_id || request.agentPlan?.trackId].filter(Boolean);
   const revisedPreview = computeRevisedPreview(prohibitedStartTime, prohibitedEndTime, duration);
+  const scoreTone = priorityScore == null ? "text-slate-500" : priorityScore >= 80 ? "text-rose-700" : priorityScore >= 65 ? "text-amber-700" : "text-emerald-700";
   const completionProof = request.completionProof || request.raw?.completion_proof;
   const isWorkCompleted = Boolean(
     completionProof ||
