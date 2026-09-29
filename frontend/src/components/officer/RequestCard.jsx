@@ -135,17 +135,45 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
   const selectedAlternative = alternatives.find((option) => option.id === selectedAltId || option.type === selectedAltId);
   const trackIds = request.raw?.track_ids?.length ? request.raw.track_ids : [request.raw?.track_id || request.agentPlan?.trackId].filter(Boolean);
   const revisedPreview = computeRevisedPreview(prohibitedStartTime, prohibitedEndTime, duration);
-  const scoreTone = priorityScore == null ? "text-slate-500" : priorityScore >= 80 ? "text-rose-700" : priorityScore >= 65 ? "text-amber-700" : "text-emerald-700";
-  const state = !isVerifiedPlan
-    ? { label: "Verification failed", detail: "Approval is blocked until the planner produces a verified option.", icon: ShieldAlert, box: "border-red-200 bg-red-50", text: "text-red-900" }
-    : isRevised
-      ? { label: "Revised plan ready", detail: "A new window was generated outside the prohibited period.", icon: CheckCircle2, box: "border-blue-200 bg-blue-50", text: "text-blue-900" }
-      : hasConflict
-        ? { label: "Conflict needs review", detail: `${conflictingTrains.length || "Timetable"} conflict${conflictingTrains.length === 1 ? "" : "s"} found in the requested window.`, icon: AlertTriangle, box: "border-amber-200 bg-amber-50", text: "text-amber-950" }
-        : { label: "Verified and ready", detail: "No timetable conflict was found for the recommended option.", icon: CheckCircle2, box: "border-emerald-200 bg-emerald-50", text: "text-emerald-950" };
+  const completionProof = request.completionProof || request.raw?.completion_proof;
+  const isWorkCompleted = Boolean(
+    completionProof ||
+    ["COMPLETED", "WORK_COMPLETED", "Completed"].includes(request.status) ||
+    ["COMPLETED", "WORK_COMPLETED", "Completed"].includes(request.raw?.status)
+  );
+  const isVerifiedWork = Boolean(
+    completionProof?.verified_by_officer ||
+    request.status === "VERIFIED" ||
+    request.raw?.status === "VERIFIED"
+  );
+  const isApproved = Boolean(
+    ["APPROVED", "Approved"].includes(request.status) ||
+    ["APPROVED", "Approved"].includes(request.raw?.status)
+  );
+  const isDeclined = Boolean(
+    ["DECLINED", "Declined", "REJECTED", "Rejected"].includes(request.status) ||
+    ["DECLINED", "Declined", "REJECTED", "Rejected"].includes(request.raw?.status)
+  );
+
+  const state = isDeclined
+    ? {
+        label: "Request Declined & Closed",
+        detail: request.reason || request.raw?.officer_feedback || "This possession request was declined by the controlling officer. No corridor possession is sanctioned.",
+        icon: Ban,
+        box: "border-rose-200 bg-rose-50",
+        text: "text-rose-950",
+      }
+    : !isVerifiedPlan
+      ? { label: "Verification failed", detail: "Approval is blocked until the planner produces a verified option.", icon: ShieldAlert, box: "border-red-200 bg-red-50", text: "text-red-900" }
+      : isRevised
+        ? { label: "Revised plan ready", detail: "A new window was generated outside the prohibited period.", icon: CheckCircle2, box: "border-blue-200 bg-blue-50", text: "text-blue-900" }
+        : hasConflict
+          ? { label: "Conflict needs review", detail: `${conflictingTrains.length || "Timetable"} conflict${conflictingTrains.length === 1 ? "" : "s"} found in the requested window.`, icon: AlertTriangle, box: "border-amber-200 bg-amber-50", text: "text-amber-950" }
+          : { label: "Verified and ready", detail: "No timetable conflict was found for the recommended option.", icon: CheckCircle2, box: "border-emerald-200 bg-emerald-50", text: "text-emerald-950" };
   const StateIcon = state.icon;
 
   const openReview = (type, option = null) => {
+    if (isDeclined) return;
     if (type === "APPROVED" && !isVerifiedPlan) return;
     // Passive or mandatory-skipping diversion options cannot be approved
     if (option && isOptionBlocked(option)) {
@@ -215,22 +243,6 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
   };
 
   const tracePlan = { ...request.agentPlan, trackId: request.raw?.track_id || request.agentPlan?.trackId, priorityScore, conflict: hasConflict, conflictingTrains, recommendedBlock, alternatives };
-
-  const completionProof = request.completionProof || request.raw?.completion_proof;
-  const isWorkCompleted = Boolean(
-    completionProof ||
-    ["COMPLETED", "WORK_COMPLETED", "Completed"].includes(request.status) ||
-    ["COMPLETED", "WORK_COMPLETED", "Completed"].includes(request.raw?.status)
-  );
-  const isVerifiedWork = Boolean(
-    completionProof?.verified_by_officer ||
-    request.status === "VERIFIED" ||
-    request.raw?.status === "VERIFIED"
-  );
-  const isApproved = Boolean(
-    ["APPROVED", "Approved"].includes(request.status) ||
-    ["APPROVED", "Approved"].includes(request.raw?.status)
-  );
 
   const handleVerifyWork = async () => {
     if (!canCertify) {
@@ -402,12 +414,14 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
           </div>
         )}
 
-        <div className="mt-4">
-          <div className="rounded-lg border border-[#cce2d5] bg-[#f2faf5] p-3.5">
-            <p className="text-sm font-medium text-emerald-800">Recommended window</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-emerald-950">{windowText(recommendedBlock?.startTime, recommendedBlock?.endTime)}</p>
+        {!isDeclined && (
+          <div className="mt-4">
+            <div className="rounded-lg border border-[#cce2d5] bg-[#f2faf5] p-3.5">
+              <p className="text-sm font-medium text-emerald-800">Recommended window</p>
+              <p className="mt-1 font-mono text-lg font-semibold text-emerald-950">{windowText(recommendedBlock?.startTime, recommendedBlock?.endTime)}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-4 flex flex-col-reverse gap-2 border-t border-[#edf0f1] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" onClick={() => setShowDetails((open) => !open)} aria-expanded={showDetails} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-[#315b75] hover:bg-[#edf4f7] ${focusRing}`}>{showDetails ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}{showDetails ? "Hide evidence" : "View evidence and agent explanation"}</button>
@@ -437,6 +451,11 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
                   <CheckCircle2 size={16} className="text-emerald-600" /> Track Safe & Restored
                 </div>
               )}
+            </div>
+          ) : isDeclined ? (
+            <div className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-rose-50 border border-rose-300 px-4 text-sm font-semibold text-rose-800">
+              <Ban size={17} className="text-rose-600" />
+              Request Declined
             </div>
           ) : isApproved ? (
             <div className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-300 px-4 text-sm font-semibold text-emerald-800">
@@ -472,7 +491,8 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
                     <button
                       type="button"
                       onClick={() => openReview("APPROVED", option)}
-                      disabled={!isVerifiedPlan}
+                      disabled={!isVerifiedPlan || isDeclined}
+                      title={isDeclined ? "Request is declined and closed" : (!isVerifiedPlan ? "Verification must pass before approval" : undefined)}
                       className={`flex min-h-11 w-full flex-col gap-2 rounded-md p-2 text-left hover:bg-[#f7fafb] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-row sm:items-center sm:justify-between ${focusRing}`}
                     >
                       <span className="flex min-w-0 items-start gap-3">
