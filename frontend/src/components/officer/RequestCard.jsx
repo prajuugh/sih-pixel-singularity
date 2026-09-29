@@ -474,8 +474,27 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
 
       {showDetails && <div className="space-y-4 border-t border-[#dfe6e9] bg-[#f8fafb] p-4 sm:p-5">
         <PlanExplanation details={request.agentPlan?.explanationDetails} requestedWindow={{ startTime: requestedStart, endTime: requestedEnd }} recommendedBlock={recommendedBlock} conflicts={conflictingTrains} />
-        <section aria-labelledby={`options-${request.id}`} className="rounded-xl border border-[#dce4e7] bg-white p-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><h4 id={`options-${request.id}`} className="font-semibold text-[#172630]">Ranked operational options</h4><p className="mt-1 text-sm text-[#667680]">Only verified, feasible options are shown.</p></div><span className="text-sm font-medium text-[#526570]">{alternatives.length} option{alternatives.length === 1 ? "" : "s"}</span></div>
-          {alternatives.length ? (
+        <section aria-labelledby={`options-${request.id}`} className="rounded-xl border border-[#dce4e7] bg-white p-4">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h4 id={`options-${request.id}`} className="font-semibold text-[#172630]">Ranked operational options</h4>
+              <p className="mt-1 text-sm text-[#667680]">
+                {isDeclined ? "All operational options are turned off for this declined request." : "Only verified, feasible options are shown."}
+              </p>
+            </div>
+            {!isDeclined && <span className="text-sm font-medium text-[#526570]">{alternatives.length} option{alternatives.length === 1 ? "" : "s"}</span>}
+          </div>
+          {isDeclined ? (
+            <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-900 flex items-start gap-3">
+              <Ban size={18} className="text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-rose-950">Options Turned Off</p>
+                <p className="mt-0.5 text-xs text-rose-800">
+                  This possession request was declined by the controlling officer. All operational options, modifications, and corridor possession approvals are completely disabled and no actions are allowed.
+                </p>
+              </div>
+            </div>
+          ) : alternatives.length ? (
             <div className="mt-3 space-y-2">
               {alternatives.map((option, index) => {
                 const optDelayed = getDelayedTrainsForOption(option, request);
@@ -585,7 +604,7 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
           ) : <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">No verified operational options are available.</p>}
 
           {/* When diversion is blocked due to electric traction or skipped mandatory halts, alert officer clearly */}
-          {isDiversionBlocked && (
+          {!isDeclined && isDiversionBlocked && (
             <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs text-amber-950">
               <div className="flex items-start gap-2.5">
                 <div className="rounded-full bg-rose-100 p-1.5 text-rose-700 shrink-0 mt-0.5">
