@@ -62,6 +62,8 @@ let useFallbackStore = false;
 const fallbackStore = {
   users: [
     { id: 1, username: "admin", name: "System Admin", email: "admin@rbps.com", password_hash: "admin123", role: "ADMIN", department: null },
+    { id: 2, username: "officer", name: "Traffic Operations Officer", email: "officer@rbps.com", password_hash: "officer123", role: "OFFICER", department: "Traffic Operations" },
+    { id: 3, username: "teams", name: "Engineering Field Crew", email: "teams@rbps.com", password_hash: "teams123", role: "TEAMS", department: "Engineering" },
   ],
   tracks: [],
   assets: [],

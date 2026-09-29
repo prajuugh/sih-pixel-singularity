@@ -20,6 +20,18 @@ export const mockUsers = [
     role: ROLES.ADMIN,
     name: "System Admin",
   },
+  {
+    username: "officer",
+    password: "officer123",
+    role: ROLES.OFFICER,
+    name: "Traffic Operations Officer",
+  },
+  {
+    username: "teams",
+    password: "teams123",
+    role: ROLES.TEAMS,
+    name: "Engineering Field Crew",
+  },
 ];
 
 export const departments = [

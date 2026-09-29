@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Ban, Camera, CheckCircle2, ChevronDown, ChevronUp, Clock3, Eye, GitCompare, MapPin, Package, Route, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, TrainFront, Users } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 import { requestStatusStyles } from "../../utils/constants";
 import Modal from "../common/Modal";
 import AgentDecisionTrace from "../common/AgentDecisionTrace";
@@ -26,6 +27,10 @@ function computeRevisedPreview(start, end, duration = 90) {
 }
 
 export default function RequestCard({ request, onApprove, onDecline, onRevision, onVerifyCompleted }) {
+  const { user } = useAuth();
+  const userRole = (user?.role || "").toLowerCase();
+  const canCertify = userRole === "officer" || userRole === "admin";
+
   const [showDetails, setShowDetails] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -228,6 +233,10 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
   );
 
   const handleVerifyWork = async () => {
+    if (!canCertify) {
+      alert(`Access Restricted: You are currently signed in as "${user?.name || user?.username || 'Team'}" (${user?.role?.toUpperCase() || 'TEAMS'}).\n\nUnder Railway safety rules, only an authorized Traffic Officer or System Admin can certify track restoration. Please log out and sign in with an Officer or Admin account.`);
+      return;
+    }
     setVerifying(true);
     try {
       const note = feedback.trim() || "Field work completion inspected, photographic evidence verified, and track certified safe for normal traffic operations.";
@@ -909,6 +918,15 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
               </p>
             </div>
 
+            {!canCertify && !isVerifiedWork && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                <span>
+                  You are currently signed in as <strong>{user?.name || user?.username || "Field Crew"}</strong> (Role: <span className="font-semibold uppercase">{user?.role || "TEAMS"}</span>). Track clearance certification requires an authorized <strong>Officer</strong> or <strong>Admin</strong> account.
+                </span>
+              </div>
+            )}
+
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200">
               <button
                 type="button"
@@ -920,9 +938,12 @@ export default function RequestCard({ request, onApprove, onDecline, onRevision,
               {!isVerifiedWork ? (
                 <button
                   type="button"
-                  disabled={verifying}
+                  disabled={verifying || !canCertify}
                   onClick={handleVerifyWork}
-                  className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-5 text-sm font-semibold text-white ${focusRing}`}
+                  title={!canCertify ? "Requires Officer or Admin session to certify track clearance" : undefined}
+                  className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white ${
+                    canCertify ? "bg-emerald-700 hover:bg-emerald-800" : "bg-slate-400 cursor-not-allowed opacity-75"
+                  } ${focusRing}`}
                 >
                   <ShieldCheck size={17} /> {verifying ? "Certifying..." : "Verify & Certify Track Clear"}
                 </button>

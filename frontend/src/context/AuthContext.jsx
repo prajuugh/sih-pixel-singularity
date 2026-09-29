@@ -25,6 +25,21 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
+  // Synchronize authentication changes across multiple tabs
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === "rbps_user") {
+        try {
+          setUser(e.newValue ? JSON.parse(e.newValue) : null);
+        } catch {
+          setUser(null);
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const updateUser = (updatedFields) => {
     setUser((prev) => {
       if (!prev) return null;

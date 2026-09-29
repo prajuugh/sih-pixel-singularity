@@ -4,9 +4,13 @@ const bcrypt = require("bcryptjs");
 async function generateSeedData(tracksCount = 5461) {
   // 1. Password hashes
   const adminHash = await bcrypt.hash("admin123", 10);
+  const officerHash = await bcrypt.hash("officer123", 10);
+  const teamsHash = await bcrypt.hash("teams123", 10);
 
   const users = [
     { id: 1, username: "admin", name: "System Admin", email: "admin@rbps.com", password_hash: adminHash, role: "ADMIN", department: null },
+    { id: 2, username: "officer", name: "Traffic Operations Officer", email: "officer@rbps.com", password_hash: officerHash, role: "OFFICER", department: "Traffic Operations" },
+    { id: 3, username: "teams", name: "Engineering Field Crew", email: "teams@rbps.com", password_hash: teamsHash, role: "TEAMS", department: "Engineering" },
   ];
 
   // 2. Corridors (10 major Karnataka corridors)
