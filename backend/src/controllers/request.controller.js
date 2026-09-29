@@ -1,5 +1,5 @@
 // backend/src/controllers/request.controller.js
-const { fallbackStore } = require("../config/database");
+const { query, fallbackStore } = require("../config/database");
 const { createRequest, reviewRequest, enrichRequestWithAgentPlan } = require("../services/request.service");
 const { persistLocalStore } = require("../services/local-store.service");
 const {
@@ -9,28 +9,89 @@ const {
   sendWorkVerifiedEmail,
 } = require("../services/email.service");
 
-function getOfficerEmails() {
-  const officers = fallbackStore.users.filter((u) => (u.role || "").toUpperCase().includes("OFFICER"));
-  const emails = officers.map((u) => u.email).filter(Boolean);
-  if (emails.length === 0) {
-    const admin = fallbackStore.users.find((u) => (u.role || "").toUpperCase() === "ADMIN");
-    if (admin?.email) emails.push(admin.email);
+async function getOfficerEmails() {
+  const emailSet = new Set();
+
+  // 1. Check database if PostgreSQL query is functional
+  try {
+    const dbRes = await query("SELECT email, role FROM users WHERE email IS NOT NULL");
+    if (dbRes && Array.isArray(dbRes.rows)) {
+      for (const u of dbRes.rows) {
+        const r = String(u.role || "").toUpperCase().trim();
+        if (r.includes("OFFICER") || r.includes("CONTROLLER") || r === "ADMIN") {
+          const email = String(u.email || "").trim().toLowerCase();
+          if (email && email.includes("@")) {
+            emailSet.add(email);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // DB query error or offline fallback
   }
-  return emails.length > 0 ? emails : ["officer@rbps.com"];
+
+  // 2. Check fallbackStore.users in memory
+  if (Array.isArray(fallbackStore.users)) {
+    for (const u of fallbackStore.users) {
+      const r = String(u.role || "").toUpperCase().trim();
+      if (r.includes("OFFICER") || r.includes("CONTROLLER") || r === "ADMIN") {
+        const email = String(u.email || "").trim().toLowerCase();
+        if (email && email.includes("@")) {
+          emailSet.add(email);
+        }
+      }
+    }
+  }
+
+  // 3. Check environment configuration overrides if set
+  if (process.env.OFFICER_EMAILS) {
+    process.env.OFFICER_EMAILS.split(",").forEach((e) => {
+      const clean = e.trim().toLowerCase();
+      if (clean && clean.includes("@")) emailSet.add(clean);
+    });
+  }
+  if (process.env.OFFICER_EMAIL) {
+    const clean = process.env.OFFICER_EMAIL.trim().toLowerCase();
+    if (clean && clean.includes("@")) emailSet.add(clean);
+  }
+
+  const list = Array.from(emailSet);
+  if (list.length > 0) return list;
+  return ["officer@rbps.com"];
 }
 
-function getEngineerEmail(request) {
-  let engineer = fallbackStore.users.find(
-    (u) =>
-      (request.created_by && u.id === request.created_by) ||
-      (request.created_by_username && u.username?.toLowerCase() === request.created_by_username.toLowerCase()) ||
-      (request.created_by_name && (u.name?.toLowerCase() === request.created_by_name.toLowerCase() || u.username?.toLowerCase() === request.created_by_name.toLowerCase())) ||
-      (request.department && (u.role || "").toUpperCase().includes("ENG") && u.department === request.department)
-  );
-  if (!engineer) {
+async function getEngineerEmail(request) {
+  let engineer = null;
+  if (Array.isArray(fallbackStore.users)) {
     engineer = fallbackStore.users.find(
+      (u) =>
+        (request.created_by && u.id === request.created_by) ||
+        (request.created_by_username && u.username?.toLowerCase() === request.created_by_username.toLowerCase()) ||
+        (request.created_by_name && (u.name?.toLowerCase() === request.created_by_name.toLowerCase() || u.username?.toLowerCase() === request.created_by_name.toLowerCase())) ||
+        (request.department && (u.role || "").toUpperCase().includes("ENG") && u.department === request.department)
+    );
+  }
+
+  if (!engineer?.email) {
+    try {
+      const dbRes = await query("SELECT id, name, username, email, role, department FROM users WHERE email IS NOT NULL");
+      if (dbRes && Array.isArray(dbRes.rows)) {
+        engineer = dbRes.rows.find(
+          (u) =>
+            (request.created_by && u.id === request.created_by) ||
+            (request.created_by_username && u.username?.toLowerCase() === request.created_by_username.toLowerCase()) ||
+            (request.created_by_name && (u.name?.toLowerCase() === request.created_by_name.toLowerCase() || u.username?.toLowerCase() === request.created_by_name.toLowerCase())) ||
+            (request.department && (u.role || "").toUpperCase().includes("ENG") && u.department === request.department)
+        );
+      }
+    } catch (e) {}
+  }
+
+  if (!engineer?.email) {
+    const defaultEng = fallbackStore.users.find(
       (u) => (u.role || "").toUpperCase() === "ENGINEER" || (u.role || "").toUpperCase() === "TEAMS"
     );
+    if (defaultEng?.email) return defaultEng.email;
   }
   return engineer?.email || "engineer@rbps.com";
 }
@@ -163,18 +224,19 @@ async function postCreateRequest(req, res, next) {
 
     // Workflow 1: Send email alert to Officer(s) that a new request was submitted
     try {
-      const officerEmails = getOfficerEmails();
+      const officerEmails = await getOfficerEmails();
       const engineerName =
         newRequest.created_by_name ||
         newRequest.created_by_username ||
         (req.user?.name || req.user?.username || "Departmental Engineer");
 
+      console.log(`[Email] Dispatching new request alert (#${newRequest.request_id}) to ${officerEmails.length} officer(s): ${officerEmails.join(", ")}`);
       for (const email of officerEmails) {
         sendNewRequestSubmittedEmail({
           to: email,
           request: newRequest,
           engineerName,
-        }).catch((err) => console.warn("[Email] New request alert to officer error:", err.message));
+        }).catch((err) => console.warn(`[Email] New request alert to officer (${email}) error:`, err.message));
       }
     } catch (e) {
       console.warn("New request email dispatch notice:", e.message);
@@ -212,18 +274,19 @@ async function submitRequest(req, res, next) {
 
     // Workflow 1: Send email alert to Officer(s) that a request was officially submitted
     try {
-      const officerEmails = getOfficerEmails();
+      const officerEmails = await getOfficerEmails();
       const engineerName =
         request.created_by_name ||
         request.created_by_username ||
         (req.user?.name || req.user?.username || "Departmental Engineer");
 
+      console.log(`[Email] Dispatching submitted request alert (#${request.request_id}) to ${officerEmails.length} officer(s): ${officerEmails.join(", ")}`);
       for (const email of officerEmails) {
         sendNewRequestSubmittedEmail({
           to: email,
           request,
           engineerName,
-        }).catch((err) => console.warn("[Email] Submitted request alert to officer error:", err.message));
+        }).catch((err) => console.warn(`[Email] Submitted request alert to officer (${email}) error:`, err.message));
       }
     } catch (e) {
       console.warn("Submit request email dispatch notice:", e.message);
@@ -271,7 +334,7 @@ async function postReviewRequest(req, res, next) {
         const officer = req.user || fallbackStore.users.find((u) => u.id === officerId || (u.role && u.role.includes("OFFICER")));
         const officerEmail = officer?.email || "officer@rbps.com";
         const officerName = officer?.name || officer?.username || "Controlling Officer";
-        const engineerEmail = getEngineerEmail(request);
+        const engineerEmail = await getEngineerEmail(request);
 
         // 1. Send confirmation to Officer
         if (officerEmail) {
@@ -320,7 +383,7 @@ async function postReviewRequest(req, res, next) {
                String(r.id).trim().toUpperCase() === normReqId
       );
       if (targetReq) {
-        const engineerEmail = getEngineerEmail(targetReq);
+        const engineerEmail = await getEngineerEmail(targetReq);
 
         // Workflow 2: Engineer and officer should get mail if an officer accepts a request
         // 1. Send confirmation to Officer
@@ -402,29 +465,19 @@ async function completeWorkRequest(req, res, next) {
 
     persistLocalStore(fallbackStore);
 
-    // Send email to Officer(s) (Workflow 3: Officer should get a mail if an engineering team adds completed work for request)
+    // Send email to all Officer(s) (Workflow 3: Officer should get a mail if an engineering team adds completed work for request)
     try {
-      let officerEmails = [];
-      const officerReviews = fallbackStore.request_reviews.filter(
-        (rv) => (rv.request_id && rv.request_id.toUpperCase() === normReqId) || String(rv.request_id) === String(requestId)
-      );
-      if (officerReviews.length > 0) {
-        const lastReview = officerReviews[officerReviews.length - 1];
-        const reviewingOfficer = fallbackStore.users.find((u) => u.id === lastReview.officer_id);
-        if (reviewingOfficer?.email) officerEmails.push(reviewingOfficer.email);
-      }
-      if (officerEmails.length === 0) {
-        officerEmails = getOfficerEmails();
-      }
+      const officerEmails = await getOfficerEmails();
+      console.log(`[Email] Dispatching work completed alert (#${request.request_id || requestId}) to ${officerEmails.length} officer(s): ${officerEmails.join(", ")}`);
 
-      officerEmails.forEach((to) => {
+      for (const to of officerEmails) {
         sendWorkRequestCompletedEmail({
           to,
           request,
           engineerName: completionProof.completed_by,
           completionProof,
-        }).catch((err) => console.warn("[Email] Work completed email error:", err.message));
-      });
+        }).catch((err) => console.warn(`[Email] Work completed email to officer (${to}) error:`, err.message));
+      }
     } catch (e) {
       console.warn("Work completion notification dispatch error:", e.message);
     }
