@@ -4,7 +4,7 @@ import { Search, ChevronDown, ChevronUp, Sparkles, Clock, Ban, CheckCircle2 } fr
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import Button from "../../components/common/Button";
-import { fetchRequests } from "../../utils/api";
+import { fetchRequests, compareRequestsLatestFirst } from "../../utils/api";
 import { requestStatusStyles } from "../../utils/constants";
 
 export default function CheckStatus() {
@@ -14,14 +14,15 @@ export default function CheckStatus() {
 
   useEffect(() => {
     fetchRequests().then((data) => {
-      setRequests(data);
-      setExpandedId(data[0]?.id ?? null);
+      const sorted = [...data].sort(compareRequestsLatestFirst);
+      setRequests(sorted);
+      setExpandedId(sorted[0]?.id ?? null);
     });
   }, []);
 
-  const filtered = requests.filter((r) =>
-    r.id.toLowerCase().includes(query.toLowerCase())
-  );
+  const filtered = requests
+    .filter((r) => r.id.toLowerCase().includes(query.toLowerCase()))
+    .sort(compareRequestsLatestFirst);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

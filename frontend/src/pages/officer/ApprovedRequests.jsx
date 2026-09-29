@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
-import { fetchRequests } from "../../utils/api";
+import { fetchRequests, compareRequestsLatestFirst } from "../../utils/api";
 
 export default function ApprovedRequests() {
   const navigate = useNavigate();
@@ -77,7 +77,7 @@ export default function ApprovedRequests() {
       const type = (r.type || "").toLowerCase();
       const tId = (r.raw?.track_id || r.recommendedBlock?.trackId || "").toLowerCase();
       return id.includes(q) || dept.includes(q) || type.includes(q) || tId.includes(q);
-    });
+    }).sort(compareRequestsLatestFirst);
   }, [approvedList, searchQuery, deptFilter]);
 
   const handleCopy = (id) => {

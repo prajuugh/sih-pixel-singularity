@@ -4,7 +4,7 @@ import { AlertTriangle, Camera, CheckCircle2, ClipboardCheck, FileCheck, Refresh
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import RequestCard from "../../components/officer/RequestCard";
-import { fetchRequests, updateRequestStatus } from "../../utils/api";
+import { fetchRequests, updateRequestStatus, compareRequestsLatestFirst } from "../../utils/api";
 
 const FILTERS = [
   { value: "ALL", label: "All", icon: ClipboardCheck },
@@ -174,7 +174,7 @@ export default function OfficerRequests() {
       const aComp = isCompletedWork(a);
       const bComp = isCompletedWork(b);
       if (queueFilter === "ALL" && aComp !== bComp) return aComp ? -1 : 1;
-      return (b.priorityScore ?? b.agentPlan?.priorityScore ?? 0) - (a.priorityScore ?? a.agentPlan?.priorityScore ?? 0);
+      return compareRequestsLatestFirst(a, b);
     }),
   [requests, queueFilter]);
 

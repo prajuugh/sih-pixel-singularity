@@ -117,6 +117,30 @@ function getAuthHeaders(defaultRole = "TEAMS") {
   return headers;
 }
 
+export function compareRequestsLatestFirst(a, b) {
+  const getTs = (r) => {
+    if (!r) return 0;
+    const raw = r.submitted_at || r.created_at || r.raw?.submitted_at || r.raw?.created_at || r.submittedAt || r.createdAt || r.updated_at || r.raw?.updated_at || r.requested_date || r.from_date || r.date;
+    if (!raw) return 0;
+    const t = new Date(raw).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+  const getSeq = (r) => {
+    if (!r) return 0;
+    const rawId = r.id ?? r.request_id ?? r.raw?.id ?? r.raw?.request_id;
+    if (typeof rawId === "number") return rawId;
+    if (typeof rawId === "string") {
+      const d = rawId.replace(/\D/g, "");
+      if (d) return Number(d);
+    }
+    return 0;
+  };
+  const tA = getTs(a);
+  const tB = getTs(b);
+  if (tB !== tA) return tB - tA;
+  return getSeq(b) - getSeq(a);
+}
+
 // ---- Requests ----
 export async function fetchRequests() {
   try {
@@ -125,8 +149,8 @@ export async function fetchRequests() {
     if (res.ok) {
       const json = await res.json();
       if (json.data && json.data.requests) {
-        // Return newest first
-        const sorted = [...json.data.requests].reverse();
+        // Return latest submitted / created requests first
+        const sorted = [...json.data.requests].sort(compareRequestsLatestFirst);
         return sorted.map((r) => {
           let uiStatus = r.status;
           if (r.status === "SUBMITTED") uiStatus = "Waiting for Approval";

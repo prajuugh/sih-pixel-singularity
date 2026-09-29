@@ -24,7 +24,7 @@ import {
 import Navbar from "../../components/common/Navbar";
 import Sidebar from "../../components/common/Sidebar";
 import Modal from "../../components/common/Modal";
-import { fetchRequests, submitWorkCompletion } from "../../utils/api";
+import { fetchRequests, submitWorkCompletion, compareRequestsLatestFirst } from "../../utils/api";
 import { useAuth } from "../../hooks/useAuth";
 
 // Default realistic sample railway maintenance site photo (encoded for instant test on desktop)
@@ -149,7 +149,7 @@ export default function TeamMaintenance() {
       }
 
       return true;
-    });
+    }).sort(compareRequestsLatestFirst);
   }, [maintenanceTasks, filterTab, searchQuery]);
 
   const counts = useMemo(() => {

@@ -35,6 +35,32 @@ function getEngineerEmail(request) {
   return engineer?.email || "engineer@rbps.com";
 }
 
+function getRequestTimestamp(r) {
+  if (!r) return 0;
+  const timeStr = r.submitted_at || r.created_at || r.updated_at || r.requested_date || r.from_date || r.date;
+  if (!timeStr) return 0;
+  const t = new Date(timeStr).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+function getRequestSequence(r) {
+  if (!r) return 0;
+  const rawId = r.id ?? r.request_id;
+  if (typeof rawId === "number") return rawId;
+  if (typeof rawId === "string") {
+    const digits = rawId.replace(/\D/g, "");
+    if (digits) return Number(digits);
+  }
+  return 0;
+}
+
+function compareRequestsLatestFirst(a, b) {
+  const tA = getRequestTimestamp(a);
+  const tB = getRequestTimestamp(b);
+  if (tB !== tA) return tB - tA;
+  return getRequestSequence(b) - getRequestSequence(a);
+}
+
 async function getAllRequests(req, res, next) {
   try {
     const { status, department } = req.query;
@@ -51,6 +77,9 @@ async function getAllRequests(req, res, next) {
     for (const r of requests) {
       await enrichRequestWithAgentPlan(r);
     }
+
+    // Always return requests sorted latest first
+    requests.sort(compareRequestsLatestFirst);
 
     res.json({
       success: true,
