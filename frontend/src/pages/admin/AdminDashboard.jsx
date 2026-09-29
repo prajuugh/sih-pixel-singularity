@@ -371,7 +371,6 @@ export default function AdminDashboard() {
           <DeptBar label="Engineering" count={users.filter((u) => u.department === "Engineering").length} total={users.length} />
           <DeptBar label="Signal & Telecom" count={users.filter((u) => u.department === "Signal & Telecom").length} total={users.length} />
           <DeptBar label="Traction Distribution" count={users.filter((u) => u.department === "Traction").length} total={users.length} />
-          <DeptBar label="Control (Officers)" count={users.filter((u) => u.department === "Control").length} total={users.length} />
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.04)] ring-1 ring-black/[0.05]">
@@ -404,7 +403,6 @@ export default function AdminDashboard() {
                   <option>Engineering</option>
                   <option>Signal & Telecom</option>
                   <option>Traction</option>
-                  <option>Control</option>
                 </select>
                 <ChevronDown size={14} className="-ml-5 pointer-events-none" />
               </label>
@@ -548,7 +546,6 @@ export default function AdminDashboard() {
                   <option value="Engineering">Engineering</option>
                   <option value="Signal & Telecom">Signal & Telecom</option>
                   <option value="Traction">Traction</option>
-                  <option value="Control">Control</option>
                 </select>
               </>
             )}
@@ -640,7 +637,6 @@ export default function AdminDashboard() {
                   <option value="Engineering">Engineering</option>
                   <option value="Signal & Telecom">Signal & Telecom</option>
                   <option value="Traction">Traction</option>
-                  <option value="Control">Control</option>
                 </select>
               </>
             )}

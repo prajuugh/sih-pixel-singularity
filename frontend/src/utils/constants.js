@@ -97,7 +97,6 @@ export const mockDepartmentUsage = [
   { name: "Engineering", count: 4, max: 4 },
   { name: "Signal & Telecom", count: 3, max: 4 },
   { name: "Traction", count: 3, max: 4 },
-  { name: "Control", count: 2, max: 4 },
 ];
 
 // TODO: replace with data fetched from the backend
@@ -109,4 +108,4 @@ export const mockActivity = [
   { date: "09 Sep 2026, 18:21", action: "Created User", user: "ctrl_admin_02", details: "New admin user added" },
 ];
 
-export const userDepartmentOptions = ["Engineering", "Signal & Telecom", "Traction", "Control"];
+export const userDepartmentOptions = ["Engineering", "Signal & Telecom", "Traction"];
