@@ -170,12 +170,7 @@ export default function OfficerRequests() {
       }
       return true;
     })
-    .sort((a, b) => {
-      const aComp = isCompletedWork(a);
-      const bComp = isCompletedWork(b);
-      if (queueFilter === "ALL" && aComp !== bComp) return aComp ? -1 : 1;
-      return compareRequestsLatestFirst(a, b);
-    }),
+    .sort(compareRequestsLatestFirst),
   [requests, queueFilter]);
 
   return (

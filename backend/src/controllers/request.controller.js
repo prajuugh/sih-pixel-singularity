@@ -37,7 +37,16 @@ function getEngineerEmail(request) {
 
 function getRequestTimestamp(r) {
   if (!r) return 0;
-  const timeStr = r.submitted_at || r.created_at || r.updated_at || r.requested_date || r.from_date || r.date;
+  const timeStr =
+    r.submitted_at ||
+    r.created_at ||
+    r.raw?.submitted_at ||
+    r.raw?.created_at ||
+    r.submittedAt ||
+    r.createdAt ||
+    r.updated_at ||
+    r.raw?.updated_at ||
+    r.updatedAt;
   if (!timeStr) return 0;
   const t = new Date(timeStr).getTime();
   return isNaN(t) ? 0 : t;
@@ -45,11 +54,16 @@ function getRequestTimestamp(r) {
 
 function getRequestSequence(r) {
   if (!r) return 0;
-  const rawId = r.id ?? r.request_id;
-  if (typeof rawId === "number") return rawId;
-  if (typeof rawId === "string") {
+  if (typeof r.id === "number" && !isNaN(r.id)) return r.id;
+  if (typeof r.raw?.id === "number" && !isNaN(r.raw.id)) return r.raw.id;
+  const rawId = String(r.id || r.request_id || r.raw?.id || r.raw?.request_id || "").trim();
+  if (rawId) {
+    const parts = rawId.split("-");
+    const lastPart = parts[parts.length - 1];
+    const parsed = parseInt(lastPart, 10);
+    if (!isNaN(parsed)) return parsed;
     const digits = rawId.replace(/\D/g, "");
-    if (digits) return Number(digits);
+    if (digits) return parseInt(digits, 10);
   }
   return 0;
 }
@@ -57,8 +71,15 @@ function getRequestSequence(r) {
 function compareRequestsLatestFirst(a, b) {
   const tA = getRequestTimestamp(a);
   const tB = getRequestTimestamp(b);
-  if (tB !== tA) return tB - tA;
-  return getRequestSequence(b) - getRequestSequence(a);
+  if (tA > 0 && tB > 0 && Math.abs(tB - tA) > 1000) {
+    return tB - tA;
+  }
+  if (tA > 0 && tB === 0) return -1;
+  if (tB > 0 && tA === 0) return 1;
+  const sA = getRequestSequence(a);
+  const sB = getRequestSequence(b);
+  if (sB !== sA) return sB - sA;
+  return tB - tA;
 }
 
 async function getAllRequests(req, res, next) {
