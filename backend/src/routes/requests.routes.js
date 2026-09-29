@@ -14,7 +14,7 @@ const { requireRole } = require("../middleware/roles");
 
 router.get("/", requireAuth, getAllRequests);
 router.get("/:requestId", requireAuth, getRequestById);
-router.post("/", requireAuth, requireRole("ADMIN", "TEAMS"), postCreateRequest);
+router.post("/", requireAuth, requireRole("ADMIN", "TEAMS", "TEAM", "ENGINEER"), postCreateRequest);
 router.post("/:requestId/submit", requireAuth, submitRequest);
 router.post("/:requestId/complete", requireAuth, completeWorkRequest);
 router.post("/:requestId/review", requireAuth, requireRole("OFFICER", "ADMIN"), postReviewRequest);

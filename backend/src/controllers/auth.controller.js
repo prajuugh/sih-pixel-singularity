@@ -79,7 +79,7 @@ async function login(req, res, next) {
         name: user.name,
         username: user.username || user.name,
         email: user.email,
-        role: user.role,
+        role: (user.role && user.role.toUpperCase() === "TEAM") ? "TEAMS" : user.role,
         department: user.department,
         is_first_login: isFirstLogin,
       },
@@ -233,7 +233,7 @@ async function createUser(req, res, next) {
 
     const rawPassword = password ? String(password).trim() : "123456";
     const hashedPassword = await bcrypt.hash(rawPassword, 10);
-    const userRole = role.toUpperCase();
+    const userRole = role.toUpperCase() === "TEAM" ? "TEAMS" : role.toUpperCase();
     const userName = name ? String(name).trim() : cleanUsername;
     const userDept = department === "—" ? null : (department || null);
 

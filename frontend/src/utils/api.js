@@ -16,6 +16,14 @@ function delay(data, ms = 200) {
   return new Promise((resolve) => setTimeout(() => resolve(data), ms));
 }
 
+function normalizeClientRole(role) {
+  const r = String(role || "").toUpperCase().trim();
+  if (r === "ADMIN") return "ADMIN";
+  if (r.includes("OFFICER") || r.includes("CONTROLLER")) return "OFFICER";
+  if (r === "TEAM" || r === "TEAMS" || r.includes("ENG") || r.includes("FIELD")) return "TEAMS";
+  return r;
+}
+
 function getTokenRole(token) {
   try {
     const payload = token.split(".")[1];
@@ -24,7 +32,7 @@ function getTokenRole(token) {
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
     const decoded = JSON.parse(atob(padded));
-    return decoded?.role ? String(decoded.role).toUpperCase() : null;
+    return decoded?.role ? normalizeClientRole(decoded.role) : null;
   } catch {
     return null;
   }
@@ -91,7 +99,7 @@ function getAuthHeaders(defaultRole = "TEAMS") {
     localStorage.removeItem("rbps_user");
   }
 
-  const role = (user?.role || defaultRole).toUpperCase();
+  const role = normalizeClientRole(user?.role || defaultRole);
   const email = user?.email || (role === "OFFICER" ? "officer@rbps.com" : (role === "TEAMS" ? "teams@rbps.com" : "admin@rbps.com"));
 
   const headers = {

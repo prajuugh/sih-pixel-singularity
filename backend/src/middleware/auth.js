@@ -23,6 +23,10 @@ function requireAuth(req, res, next) {
   const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded && decoded.role) {
+      const r = String(decoded.role).toUpperCase().trim();
+      decoded.role = (r === "TEAM" || r === "TEAMS" || r.includes("ENG")) ? "TEAMS" : r;
+    }
     req.user = decoded;
     next();
   } catch (err) {
