@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RBPS Mail — Railway Block Possession System</title>
+<style>
+  /* ── Base ────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #1a1c23;
+    color: #e0e4ef;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top Bar ─────────────────────────────────────────── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    background: #0d0f14;
+    padding: 0 20px;
+    height: 56px;
+    border-bottom: 1px solid #2a2d3a;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .topbar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, #1a4f91, #2563eb);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo-text { font-size: 16px; font-weight: 700; color: #e0e4ef; letter-spacing: 0.5px; }
+  .logo-sub  { font-size: 11px; color: #6b7280; margin-top: 1px; }
+  .topbar-search {
+    flex: 1; max-width: 520px; margin: 0 auto;
+    background: #1e2230; border: 1px solid #2a2d3a; border-radius: 22px;
+    padding: 8px 16px; font-size: 13px; color: #a0aec0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .topbar-actions { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, #1a4f91, #06b6d4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #fff;
+    cursor: pointer;
+  }
+  .role-badge {
+    font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 12px;
+    background: #1e3a5f; color: #60a5fa;
+    border: 1px solid #2563eb33;
+    letter-spacing: 0.4px;
+  }
+
+  /* ── Layout ──────────────────────────────────────────── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  .sidebar {
+    width: 220px;
+    background: #111318;
+    border-right: 1px solid #1e2230;
+    padding: 16px 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sidebar-section {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+    color: #4b5563; text-transform: uppercase;
+    padding: 14px 18px 4px;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 18px;
+    font-size: 13px; color: #9ca3af;
+    cursor: pointer; border-radius: 0;
+    transition: background 0.15s, color 0.15s;
+    position: relative;
+  }
+  .sidebar-item:hover { background: #1e2230; color: #e0e4ef; }
+  .sidebar-item.active {
+    background: #1a2744;
+    color: #60a5fa;
+    border-right: 3px solid #2563eb;
+  }
+  .sidebar-item .icon { font-size: 16px; width: 20px; text-align: center; }
+  .sidebar-badge {
+    margin-left: auto;
+    background: #dc2626;
+    color: #fff;
+    font-size: 10px; font-weight: 700;
+    min-width: 18px; height: 18px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 4px;
+    animation: badge-pulse 2s ease-in-out infinite;
+  }
+  @keyframes badge-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,38,38,0.5); }
+    50%       { transform: scale(1.12); box-shadow: 0 0 0 5px rgba(220,38,38,0); }
+  }
+
+  /* ── Email List ──────────────────────────────────────── */
+  .email-list-panel {
+    width: 360px;
+    border-right: 1px solid #1e2230;
+    display: flex; flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e2230;
+    background: #111318;
+  }
+  .panel-title { font-size: 15px; font-weight: 700; color: #e0e4ef; }
+  .panel-count  { font-size: 12px; color: #6b7280; }
+  .email-list   { flex: 1; overflow-y: auto; }
+
+  .email-row {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 13px 16px;
+    border-bottom: 1px solid #1a1d28;
+    cursor: pointer;
+    transition: background 0.2s;
+    position: relative;
+    animation: row-arrive 0.55s cubic-bezier(.22,.68,0,1.2) both;
+  }
+  .email-row:hover  { background: #1e2230; }
+  .email-row.active { background: #1a2744; }
+  .email-row.unread { border-left: 3px solid #2563eb; }
+  .email-row.new-arrival {
+    animation: row-arrive 0.6s cubic-bezier(.22,.68,0,1.2) both;
+  }
+
+  @keyframes row-arrive {
+    from { opacity: 0; transform: translateY(-22px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .email-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .email-meta { flex: 1; min-width: 0; }
+  .email-sender { font-size: 13px; font-weight: 600; color: #e0e4ef; }
+  .email-subject {
+    font-size: 12px; color: #9ca3af;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 240px;
+  }
+  .email-preview {
+    font-size: 11px; color: #6b7280;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 240px;
+    margin-top: 2px;
+  }
+  .email-time { font-size: 10px; color: #4b5563; white-space: nowrap; margin-top: 2px; }
+  .unread-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #2563eb;
+    flex-shrink: 0; margin-top: 5px;
+  }
+
+  /* NEW mail toast ───── */
+  .new-mail-toast {
+    position: fixed; top: 70px; right: 20px;
+    background: linear-gradient(135deg, #1a4f91ee, #0f172aee);
+    border: 1px solid #2563eb55;
+    border-radius: 12px;
+    padding: 12px 18px;
+    display: flex; align-items: center; gap: 12px;
+    z-index: 99;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    animation: toast-in 0.5s cubic-bezier(.22,.68,0,1.2) both,
+               toast-out 0.5s ease 4s both;
+    backdrop-filter: blur(8px);
+  }
+  @keyframes toast-in  { from { opacity:0; transform: translateX(80px); } to { opacity:1; transform:none; } }
+  @keyframes toast-out { from { opacity:1; } to { opacity:0; transform: translateX(80px); } }
+  .toast-icon { font-size: 24px; }
+  .toast-body .toast-title { font-size: 13px; font-weight: 700; color: #e0e4ef; }
+  .toast-body .toast-sub   { font-size: 11px; color: #93c5fd; margin-top: 2px; }
+
+  /* ── Preview Pane ────────────────────────────────────── */
+  .email-preview-pane {
+    flex: 1; overflow-y: auto;
+    display: flex; flex-direction: column;
+    animation: pane-slide 0.45s cubic-bezier(.22,.68,0,1.2) both;
+  }
+  @keyframes pane-slide {
+    from { opacity: 0; transform: translateX(30px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .preview-header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid #1e2230;
+    background: #111318;
+    flex-shrink: 0;
+  }
+  .preview-subject { font-size: 18px; font-weight: 700; color: #e0e4ef; margin-bottom: 10px; line-height: 1.3; }
+  .preview-meta { display: flex; gap: 14px; align-items: center; }
+  .preview-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .preview-from .name { font-size: 13px; font-weight: 600; color: #e0e4ef; }
+  .preview-from .addr { font-size: 11px; color: #6b7280; }
+  .preview-from .time { font-size: 11px; color: #4b5563; }
+  .preview-body { flex: 1; padding: 24px 28px; }
+  .email-card {
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    max-width: 640px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    animation: card-arrive 0.5s 0.15s cubic-bezier(.22,.68,0,1.2) both;
+  }
+  @keyframes card-arrive {
+    from { opacity:0; transform: translateY(20px) scale(0.98); }
+    to   { opacity:1; transform:none; }
+  }
+  .email-card-header {
+    background: linear-gradient(135deg, #0f2f5e, #1a4f91);
+    padding: 28px 32px;
+    text-align: center;
+  }
+  .email-card-header .brand {
+    font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    color: #93c5fd; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .email-card-header .headline {
+    font-size: 22px; font-weight: 800; color: #fff; line-height: 1.3;
+  }
+  .email-card-header .headline .emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+  .email-card-body { padding: 28px 32px; color: #1f2937; }
+  .email-card-body h2 { font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 12px; }
+  .email-card-body p  { font-size: 14px; color: #374151; line-height: 1.65; margin-bottom: 12px; }
+  .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .info-table td { padding: 9px 12px; font-size: 13px; }
+  .info-table tr:nth-child(odd) td { background: #f3f4f6; }
+  .info-table td:first-child { font-weight: 600; color: #374151; width: 42%; }
+  .info-table td:last-child  { color: #111827; }
+  .cta-btn {
+    display: inline-block;
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    color: #fff !important; text-decoration: none;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+    padding: 13px 32px; border-radius: 8px;
+    margin: 16px 0;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.4);
+    animation: btn-glow 2s ease-in-out infinite;
+  }
+  @keyframes btn-glow {
+    0%,100% { box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
+    50%      { box-shadow: 0 4px 24px rgba(37,99,235,0.7); }
+  }
+  .email-card-footer {
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    padding: 16px 32px;
+    font-size: 11px; color: #9ca3af;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; padding: 4px 12px;
+    border-radius: 12px; margin-top: 4px;
+  }
+
+  /* ── Empty state ─────────────────────────────────────── */
+  .empty-pane {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
+    color: #4b5563;
+  }
+  .empty-pane .icon { font-size: 54px; }
+  .empty-pane p { font-size: 14px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 3px; }
+</style>
+</head>
+<body>
+<!-- ── Top Bar ─────────────────────────────────── -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <div class="logo-icon">🚆</div>
+    <div>
+      <div class="logo-text">RBPS Mail</div>
+      <div class="logo-sub">Railway Block Possession System</div>
+    </div>
+  </div>
+  <div class="topbar-search">
+    🔍&nbsp; Search mail…
+  </div>
+  <div class="topbar-actions">
+    <div class="role-badge" id="role-badge">Officer</div>
+    <div class="avatar" id="user-avatar">O</div>
+  </div>
+</div>
+
+<!-- ── Toast ──────────────────────────────────── -->
+<div class="new-mail-toast" id="toast" style="display:none;">
+  <div class="toast-icon">✉️</div>
+  <div class="toast-body">
+    <div class="toast-title" id="toast-title">New message arrived</div>
+    <div class="toast-sub"  id="toast-sub">RBPS Notification Service</div>
+  </div>
+</div>
+
+<!-- ── Main Layout ────────────────────────────── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">Mailboxes</div>
+    <div class="sidebar-item active">
+      <span class="icon">📥</span> Inbox
+      <span class="sidebar-badge" id="badge-count">1</span>
+    </div>
+    <div class="sidebar-item">
+      <span class="icon">⭐</span> Starred
+    </div>
+    <div class="sidebar-item">
+      <span class="icon">🕐</span> Snoozed
+    </div>
+    <div class="sidebar-item">
+      <span class="icon">📤</span> Sent
+    </div>
+    <div class="sidebar-item">
+      <span class="icon">📝</span> Drafts
+    </div>
+    <div class="sidebar-section" style="margin-top:10px">Categories</div>
+    <div class="sidebar-item">
+      <span class="icon">🔔</span> Notifications
+    </div>
+    <div class="sidebar-item">
+      <span class="icon">🚨</span> Alerts
+    </div>
+    <div class="sidebar-item">
+      <span class="icon">🗂️</span> Archive
+    </div>
+    <div style="flex:1"></div>
+    <div style="padding:14px 18px; font-size:11px; color:#4b5563; border-top:1px solid #1e2230; margin-top:10px;">
+      🔒 Secured · TLS 1.3
+    </div>
+  </div>
+
+  <!-- Email List -->
+  <div class="email-list-panel">
+    <div class="panel-header">
+      <span class="panel-title" id="panel-title">Inbox</span>
+      <span class="panel-count" id="panel-count">Loading…</span>
+    </div>
+    <div class="email-list" id="email-list">
+      <!-- rows injected by JS -->
+    </div>
+  </div>
+
+  <!-- Preview Pane -->
+  <div class="email-preview-pane" id="preview-pane">
+    <div class="empty-pane" id="empty-state">
+      <div class="icon">📭</div>
+      <p>Select an email to read</p>
+    </div>
+    <div id="preview-content" style="display:none; flex-direction:column; flex:1;">
+      <div class="preview-header">
+        <div class="preview-subject" id="prev-subject">—</div>
+        <div class="preview-meta">
+          <div class="preview-avatar" id="prev-avatar"></div>
+          <div class="preview-from">
+            <div class="name" id="prev-from-name">—</div>
+            <div class="addr" id="prev-from-addr">—</div>
+            <div class="time" id="prev-time">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <div class="email-card" id="email-card-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Email data ─────────────────────────────────────────── */
+const EMAILS = {
+  /* ── Officer inbox ───────────── step=1 ── */
+  "officer-1": {
+    role: "officer",
+    sender: "RBPS Notification",
+    senderInitials: "RN",
+    senderColor: "#1a4f91",
+    fromAddr: "noreply@rbps.railways.gov.in",
+    time: "Just now",
+    subject: "📋 New Possession Request Submitted – #ENG-2026-00013",
+    preview: "A new block possession request has been submitted and is awaiting your review.",
+    cardHeaderEmoji: "📋",
+    cardHeadline: "New Possession Request<br>Submitted for Review",
+    cardBrand: "Railway Block Possession System",
+    body: `
+      <h2>Officer Action Required</h2>
+      <p>A new block possession request has been submitted by the <strong>Engineering Crew – North Zone Division</strong> and is pending your review and AI-assisted scheduling analysis.</p>
+      <table class="info-table">
+        <tr><td>Request ID</td><td><strong>#ENG-2026-00013</strong></td></tr>
+        <tr><td>Submitted By</td><td>Engineering Crew – North Zone</td></tr>
+        <tr><td>Track Section</td><td>KGP–HWH Chord Line, Km 42–57</td></tr>
+        <tr><td>Work Type</td><td>OHE Mast Replacement &amp; Track Geometry Correction</td></tr>
+        <tr><td>Requested Window</td><td>03:00 – 06:00 IST (180 min)</td></tr>
+        <tr><td>Priority Score</td><td>🔴 87 / 100 (Critical)</td></tr>
+        <tr><td>AI Agent Status</td><td>✅ Plan Verified &amp; Ranked</td></tr>
+      </table>
+      <p>The AI Block Planning Agent has analyzed traffic patterns, timetable occupancy, and safety constraints. The optimized block plan is ready for your sanction.</p>
+      <div style="text-align:center;">
+        <a href="#" class="cta-btn">🔍 Review &amp; Sanction Block Plan</a>
+      </div>
+    `,
+    toastTitle: "New Possession Request #00013",
+    toastSub: "Awaiting officer review & AI sanction",
+    badgeCount: 1,
+  },
+
+  /* ── Engineer inbox ───────────── step=2 ── */
+  "engineer-2": {
+    role: "engineer",
+    sender: "Traffic Operations Officer",
+    senderInitials: "TO",
+    senderColor: "#065f46",
+    fromAddr: "officer@rbps.railways.gov.in",
+    time: "2 min ago",
+    subject: "✅ Block Plan Approved & Released – #ENG-2026-00013",
+    preview: "Your block possession request has been reviewed, AI-verified, and officially sanctioned.",
+    cardHeaderEmoji: "✅",
+    cardHeadline: "Block Possession Sanctioned<br>&amp; Released",
+    cardBrand: "Railway Block Possession System",
+    body: `
+      <h2>Your Block Plan Has Been Approved!</h2>
+      <p>The Traffic Operations Officer has reviewed the AI-generated block plan for your request and has officially <strong>sanctioned the possession window</strong>. Your crew may proceed with the planned maintenance work.</p>
+      <table class="info-table">
+        <tr><td>Request ID</td><td><strong>#ENG-2026-00013</strong></td></tr>
+        <tr><td>Approved By</td><td>Dy. Chief TRD Officer – Eastern Railway</td></tr>
+        <tr><td>Sanctioned Window</td><td><strong>03:00 – 06:00 IST</strong></td></tr>
+        <tr><td>Track Section</td><td>KGP–HWH Chord Line, Km 42–57</td></tr>
+        <tr><td>Work Type</td><td>OHE Mast Replacement &amp; Track Geometry Correction</td></tr>
+        <tr><td>Safety Clearance</td><td>🛡️ All 7 constraints verified — Safe to proceed</td></tr>
+        <tr><td>Status</td><td><span class="status-chip" style="background:#d1fae5;color:#065f46;">✅ APPROVED</span></td></tr>
+      </table>
+      <p><strong>Important:</strong> Ensure all safety protocols are followed. Submit photographic evidence and a completion report immediately after work is done.</p>
+      <div style="text-align:center;">
+        <a href="#" class="cta-btn">📋 View Sanctioned Block Plan</a>
+      </div>
+    `,
+    toastTitle: "Request #00013 Approved!",
+    toastSub: "Block plan sanctioned — crew may proceed",
+    badgeCount: 1,
+  },
+
+  /* ── Officer inbox (work complete) ── step=3 ── */
+  "officer-3": {
+    role: "officer",
+    sender: "Field Crew – North Zone",
+    senderInitials: "FC",
+    senderColor: "#92400e",
+    fromAddr: "crew.northzone@rbps.railways.gov.in",
+    time: "Just now",
+    subject: "🛠️ Work Completed & Evidence Submitted – #ENG-2026-00013",
+    preview: "The engineering crew has completed the maintenance work and submitted photographic evidence.",
+    cardHeaderEmoji: "🛠️",
+    cardHeadline: "Maintenance Work Completed<br>&amp; Evidence Submitted",
+    cardBrand: "Railway Block Possession System",
+    body: `
+      <h2>Work Completion Reported</h2>
+      <p>The <strong>Engineering Crew – North Zone Division</strong> has completed all maintenance tasks within the sanctioned block window and submitted evidence for your verification.</p>
+      <table class="info-table">
+        <tr><td>Request ID</td><td><strong>#ENG-2026-00013</strong></td></tr>
+        <tr><td>Completed By</td><td>Engineering Crew – North Zone Division</td></tr>
+        <tr><td>Actual Duration</td><td>03:00 – 05:48 IST (168 min)</td></tr>
+        <tr><td>Track Section</td><td>KGP–HWH Chord Line, Km 42–57</td></tr>
+        <tr><td>Work Type</td><td>OHE Mast Replacement &amp; Track Geometry Correction</td></tr>
+        <tr><td>Evidence</td><td>📷 4 site photos submitted</td></tr>
+        <tr><td>Status</td><td><span class="status-chip" style="background:#fef3c7;color:#92400e;">🔄 PENDING CERTIFICATION</span></td></tr>
+      </table>
+      <p>Please verify the evidence and <strong>certify the track as safe</strong> before traffic resumes on the section.</p>
+      <div style="text-align:center;">
+        <a href="#" class="cta-btn">🛡️ Review Evidence &amp; Certify Safe</a>
+      </div>
+    `,
+    toastTitle: "Work Complete – #00013",
+    toastSub: "Evidence submitted — officer certification required",
+    badgeCount: 2,
+  },
+};
+
+/* ── Helper: background emails (already in inbox) ──────── */
+const BG_EMAILS = [
+  {
+    sender: "RBPS System",      initials: "RS", color: "#374151",
+    subject: "Monthly Track Maintenance Schedule — Oct 2026",
+    preview: "Attached is the consolidated monthly schedule for all divisions…",
+    time: "Yesterday",
+  },
+  {
+    sender: "Safety Cell",      initials: "SC", color: "#7c3aed",
+    subject: "⚠️ Safety Advisory – OHE Clearance Update",
+    preview: "Please note the revised OHE clearance norms effective 01 Oct 2026…",
+    time: "Mon",
+  },
+  {
+    sender: "HQ Planning",      initials: "HQ", color: "#1d4ed8",
+    subject: "Zonal Traffic Block Quota – Q3 Review",
+    preview: "The Q3 block quota review meeting is scheduled for 10 Oct 2026…",
+    time: "Mon",
+  },
+  {
+    sender: "RBPS Admin",       initials: "RA", color: "#0369a1",
+    subject: "System Update: AI Agent v2.4 deployed",
+    preview: "The AI Block Planning Agent has been upgraded to version 2.4…",
+    time: "Fri",
+  },
+];
+
+/* ── Init ────────────────────────────────────── */
+const params  = new URLSearchParams(window.location.search);
+const roleKey = (params.get("role") || "officer").toLowerCase();
+const stepNum = parseInt(params.get("step") || "1");
+
+// Map role+step to email key
+const emailKey = `${roleKey.startsWith("officer") ? "officer" : "engineer"}-${stepNum}`;
+const activeEmail = EMAILS[emailKey] || EMAILS["officer-1"];
+
+// Adjust UI for role
+const isEngineer = activeEmail.role === "engineer";
+document.getElementById("role-badge").textContent  = isEngineer ? "Engineering Team" : "Traffic Officer";
+document.getElementById("user-avatar").textContent  = isEngineer ? "E" : "O";
+document.getElementById("panel-title").textContent  = isEngineer ? "Inbox — Engineering Team" : "Inbox — Officer Desk";
+
+/* ── Render email list ──────────────────────── */
+function renderEmailList() {
+  const list = document.getElementById("email-list");
+  list.innerHTML = "";
+
+  // New/active email first (will animate in)
+  const newRow = createEmailRow(activeEmail, true, true);
+  list.appendChild(newRow);
+
+  // Background emails
+  BG_EMAILS.forEach(bg => {
+    const row = createEmailRow({
+      sender: bg.sender, senderInitials: bg.initials, senderColor: bg.color,
+      subject: bg.subject, preview: bg.preview, time: bg.time,
+    }, false, false);
+    list.appendChild(row);
+  });
+
+  document.getElementById("panel-count").textContent = `${1 + BG_EMAILS.length} messages`;
+  document.getElementById("badge-count").textContent = activeEmail.badgeCount;
+}
+
+function createEmailRow(email, isNew, isActive) {
+  const row = document.createElement("div");
+  row.className = "email-row" + (isActive ? " active unread" : "");
+  row.style.animationDelay = isNew ? "0.3s" : `${Math.random()*0.2+0.05}s`;
+
+  row.innerHTML = `
+    <div class="email-avatar" style="background:${email.senderColor || "#374151"}">${email.senderInitials || "?"}</div>
+    <div class="email-meta">
+      <div class="email-sender">${email.sender}</div>
+      <div class="email-subject">${email.subject}</div>
+      <div class="email-preview">${email.preview}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+      <div class="email-time">${email.time}</div>
+      ${isNew ? '<div class="unread-dot"></div>' : ''}
+    </div>
+  `;
+  if (isActive) row.addEventListener("click", showPreview);
+  return row;
+}
+
+/* ── Render preview pane ────────────────────── */
+function showPreview() {
+  document.getElementById("empty-state").style.display    = "none";
+  const content = document.getElementById("preview-content");
+  content.style.display = "flex";
+
+  document.getElementById("prev-subject").textContent    = activeEmail.subject;
+  document.getElementById("prev-avatar").textContent     = activeEmail.senderInitials;
+  document.getElementById("prev-avatar").style.background = activeEmail.senderColor;
+  document.getElementById("prev-from-name").textContent  = activeEmail.sender;
+  document.getElementById("prev-from-addr").textContent  = activeEmail.fromAddr;
+  document.getElementById("prev-time").textContent       = activeEmail.time;
+
+  document.getElementById("email-card-body").innerHTML = `
+    <div class="email-card-header">
+      <div class="brand">${activeEmail.cardBrand}</div>
+      <div class="headline">
+        <span class="emoji">${activeEmail.cardHeaderEmoji}</span>
+        ${activeEmail.cardHeadline}
+      </div>
+    </div>
+    <div class="email-card-body">${activeEmail.body}</div>
+    <div class="email-card-footer">
+      This is an automated notification from the Railway Block Possession System (RBPS).<br>
+      Please do not reply to this email. For queries, contact <strong>rbps-support@railways.gov.in</strong><br>
+      © 2026 Indian Railways · Eastern Zone · All rights reserved.
+    </div>
+  `;
+}
+
+/* ── Toast notification ─────────────────────── */
+function showToast() {
+  const toast = document.getElementById("toast");
+  document.getElementById("toast-title").textContent = activeEmail.toastTitle;
+  document.getElementById("toast-sub").textContent   = activeEmail.toastSub;
+  toast.style.display = "flex";
+  setTimeout(() => { toast.style.display = "none"; }, 5000);
+}
+
+/* ── Auto-sequence ──────────────────────────── */
+// 1. Render list first (background emails already there)
+renderEmailList();
+
+// 2. After 800ms: show toast notification
+setTimeout(showToast, 800);
+
+// 3. After 1.6s: auto-open the new email
+setTimeout(showPreview, 1600);
+</script>
+</body>
+</html>
