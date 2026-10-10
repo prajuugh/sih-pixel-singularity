@@ -1,16 +1,565 @@
-# React + Vite
+<div align="center">
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# 🚆 RBPS — Railway Block Possession System
 
-Currently, two official plugins are available:
+### AI-Powered Track Maintenance Planning & Scheduling Platform
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-## React Compiler
+> Built for **Smart India Hackathon (SIH) 2024** — Problem Statement: Intelligent Block Possession Management for Indian Railways
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Live Demo:** `http://13.201.193.163:5000`
 
-## Expanding the ESLint configuration
+</div>
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [AI Agent Architecture](#-ai-agent-architecture)
+- [System Roles](#-system-roles)
+- [Application Routes](#-application-routes)
+- [Email Notification System](#-email-notification-system)
+- [Database Schema](#-database-schema)
+- [Project Structure](#-project-structure)
+- [Setup & Installation](#-setup--installation)
+- [Environment Variables](#-environment-variables)
+- [API Reference](#-api-reference)
+- [Dataset](#-dataset)
+
+---
+
+## 🌐 Overview
+
+The **Railway Block Possession System (RBPS)** is a full-stack intelligent platform that digitises and automates the entire lifecycle of **track block possession requests** on the Indian Railways network.
+
+A "block possession" is when a section of railway track is taken out of service for maintenance work — no trains can run on it during this window. Currently, this process is manual, paper-based, and error-prone. RBPS replaces it with an **AI-driven multi-agent pipeline** that:
+
+1. Analyses traffic timetables and detects conflicts
+2. Scores each request using Multi-Criteria Decision Analysis (MCDA)
+3. Generates and ranks safe alternative time windows
+4. Provides a full explainable audit trail
+5. Notifies all stakeholders via email at every step
+
+---
+
+## ✨ Features
+
+### 👷 Engineering Team Portal
+- **Submit Block Possession Requests** via an interactive form overlaid on a live GIS map
+- Select track section directly by clicking on the railway network on the map
+- Specify work type, date, start/end time, and duration
+- View real-time **request status tracker** — see AI analysis results, revised slots, and officer decisions
+- **Work Completion Reporting** — upload site photos as evidence after completing maintenance
+- Calendar view of all scheduled possessions
+
+### 🚦 Traffic Operations Officer Desk
+- **AI-Assisted Planning Desk** — see all incoming requests ranked by priority
+- Requests sorted **latest-first** by submission timestamp
+- Expand each request to view the full **Explainable AI Decision Trace**:
+  - MCDA priority score breakdown (7 dimensions)
+  - Timetable occupancy conflict analysis
+  - Ranked alternative possession windows
+  - 5-agent handoff record ledger
+- **One-click Approve / Modify / Decline** with confirmation modal
+- Declined requests lock all operational options — no accidental actions
+- Approved Requests desk with live status tracking
+- Calendar view of all sanctioned blocks
+- **Live GIS Corridor Map** showing active possession zones colour-coded on the railway network
+
+### 🔐 Admin Portal
+- Role-based user management — create, view, and manage users
+- Assign roles: `ADMIN`, `OFFICER`, `TEAMS`
+- Account creation triggers automatic welcome email with initial credentials
+- Dashboard with system-wide statistics
+
+### 📧 Email Notification System
+- Real-time email alerts broadcast to **all registered officers** at every lifecycle event
+- Engineers receive personal notifications on approval and certification
+- 6 email templates with professional HTML design (dark blue railway header, inline CSS)
+- Graceful fallback — if SMTP is unconfigured, emails are simulated and logged
+
+### 🗺️ Live GIS Digital Twin
+- Interactive Leaflet/Mapbox map of the Indian Railways network
+- Real-time possession zone overlays
+- Track section highlighting on request submission
+- Live train position integration (RapidAPI / CRIS Enterprise / Mock provider)
+
+### 🤖 Explainable AI
+- Every AI decision is traceable — no black boxes
+- Full agent handoff ledger stored per request
+- Natural language explanation generated by DeepSeek LLM (with deterministic fallback)
+- Safety verifier hard-veto results displayed with reason codes
+
+---
+
+## 🛠 Tech Stack
+
+### Frontend
+| Technology | Purpose |
+|---|---|
+| **React 18** | Component-based UI framework |
+| **Vite** | Build tool & dev server |
+| **React Router v6** | Client-side routing |
+| **Tailwind CSS** | Utility-first styling |
+| **Leaflet / React-Leaflet** | Interactive GIS map |
+| **Axios** | HTTP client for API calls |
+| **Lucide React** | Icon library |
+| **date-fns** | Date formatting & manipulation |
+
+### Backend
+| Technology | Purpose |
+|---|---|
+| **Node.js 18+** | Runtime |
+| **Express.js** | REST API framework |
+| **PostgreSQL 15** | Primary relational database |
+| **Supabase** | Managed PostgreSQL + auth (optional) |
+| **node-postgres (pg)** | PostgreSQL client |
+| **Nodemailer** | Email dispatch (SMTP) |
+| **bcrypt** | Password hashing |
+| **JWT** | Stateless authentication tokens |
+| **dotenv** | Environment variable management |
+
+### AI Agent Service
+| Technology | Purpose |
+|---|---|
+| **Python 3.11+** | Agent runtime |
+| **Flask / FastAPI** | Microservice HTTP server (port 5001) |
+| **NetworkX** | Railway graph — Dijkstra bypass routing |
+| **OSMnx** | OpenStreetMap railway network extraction |
+| **NumPy** | MCDA weighted scoring calculations |
+| **Shapely / PyProj** | Geospatial calculations (Haversine) |
+| **Requests** | HTTP calls to backend & LLM API |
+| **DeepSeek / OpenRouter** | LLM for natural language explanations |
+
+### Infrastructure & DevOps
+| Technology | Purpose |
+|---|---|
+| **AWS EC2** | Production server (Ubuntu) |
+| **Docker / Docker Compose** | Containerisation |
+| **Nginx** | Reverse proxy & static file serving |
+| **GitHub** | Version control (`main` + `st3` branches) |
+| **Playwright** | Automated browser testing & video capture |
+| **OpenCV (cv2)** | Video transcoding (WebM → MP4) |
+
+---
+
+## 🤖 AI Agent Architecture
+
+The AI pipeline is a **multi-agent orchestration system** consisting of 6 specialised agents:
+
+```
+                    ┌─────────────────────────────┐
+                    │      Orchestrator Agent       │
+                    │  Routes request, coordinates  │
+                    │  agent pipeline, stores ledger│
+                    └────────────┬────────────────-─┘
+                                 │
+           ┌─────────────────────┼──────────────────────┐
+           │                     │                      │
+           ▼                     ▼                      ▼
+  ┌─────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+  │ Maintenance Risk │  │  Traffic Agent   │  │ Block Planner    │
+  │     Agent        │  │                  │  │    Agent         │
+  │                  │  │ • Timetable      │  │                  │
+  │ • Asset health   │  │   occupancy check│  │ • MCDA scoring   │
+  │ • Failure prob.  │  │ • Interval arith.│  │ • 3 alternatives │
+  │ • Criticality    │  │ • Dijkstra bypass│  │ • RESCHEDULE /   │
+  │   scoring        │  │ • Haversine dist.│  │   DELAY / REROUTE│
+  └─────────────────┘  └──────────────────┘  └──────────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────────┐
+                    │    Safety Verifier Agent      │
+                    │  7 Hard Constraint Rules      │
+                    │  FAIL-CLOSED veto on any fail │
+                    └────────────┬────────────────-─┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────────┐
+                    │     Explanation Agent         │
+                    │  DeepSeek LLM (grounded)      │
+                    │  + Deterministic fallback      │
+                    └─────────────────────────────-─┘
+```
+
+### MCDA Weighted Scoring
+
+Each request is scored out of 100 across 7 dimensions:
+
+| Dimension | Weight | Description |
+|---|---|---|
+| Safety Score | **20%** | Asset condition, proximity to other works |
+| Criticality Score | **20%** | Impact of not doing the work |
+| Urgency Score | **15%** | Time sensitivity of the maintenance |
+| Overdue Score | **15%** | How long overdue the maintenance is |
+| Failure Probability | **10%** | Statistical likelihood of asset failure |
+| Asset Availability | **10%** | Whether required equipment is available |
+| Train Traffic Impact | **10%** | Number of trains affected during the window |
+
+### Safety Verifier — 7 Hard Constraint Rules
+
+The Safety Verifier applies a **fail-closed veto** — if ANY rule fails, the plan is rejected:
+
+1. No occupancy overlap with any scheduled train on the section
+2. Track ID matches between request and block plan
+3. Duration is sufficient for the planned work
+4. Authoritative timetable data available for the section
+5. No conflicting possession on adjacent sections
+6. Minimum crew safety window respected (buffer before first train)
+7. OHE/power status compatible with the work type
+
+### Traffic Conflict Detection
+
+- **Interval arithmetic** occupancy check with ±1440 minute shift (overnight crossings)
+- **Dijkstra's algorithm** on an OSM-derived NetworkX railway graph for bypass routing
+- **Haversine formula** for accurate great-circle distances between stations
+
+---
+
+## 👥 System Roles
+
+| Role | Username | Access |
+|---|---|---|
+| `ADMIN` | `admin` | User management, system overview |
+| `OFFICER` | `officer` | All requests, AI traces, approve/decline, GIS map |
+| `TEAMS` | `teams` | Submit requests, check status, mark work complete |
+
+---
+
+## 🗂 Application Routes
+
+### Public
+| Route | Page |
+|---|---|
+| `/` | Landing Page — system overview & metrics |
+| `/login` | Login Page |
+
+### Admin (`role: ADMIN`)
+| Route | Page |
+|---|---|
+| `/admin` | Admin Dashboard — user management & stats |
+
+### Officer (`role: OFFICER`)
+| Route | Page |
+|---|---|
+| `/officer` | Officer Dashboard |
+| `/officer/requests` | **AI Planning Desk** — main request review page |
+| `/officer/approved-requests` | Approved Requests with status tracking |
+| `/officer/live-map` | Live GIS Corridor Map |
+| `/officer/calendar` | Possession Calendar |
+
+### Engineering Teams (`role: TEAMS`)
+| Route | Page |
+|---|---|
+| `/teams` | Teams Dashboard — asset health & overview |
+| `/teams/requests` | **Submit Possession Request** (Live Map + form drawer) |
+| `/teams/check-status` | Request Status Tracker |
+| `/teams/maintenance` | Maintenance Tasks & Work Completion |
+| `/teams/calendar` | Team Calendar |
+| `/teams/live-map` | Live GIS Map (read-only) |
+
+### Static Demo Pages
+| URL | Description |
+|---|---|
+| `/email-demo.html?role=officer&step=1` | Animated email inbox — Officer sees new request alert |
+| `/email-demo.html?role=engineer&step=2` | Animated email inbox — Engineer sees approval notification |
+| `/email-demo.html?role=officer&step=3` | Animated email inbox — Officer sees work completion alert |
+
+---
+
+## 📧 Email Notification System
+
+All emails are sent via **Nodemailer** (SMTP) and broadcast to all registered officers where applicable.
+
+| Event | Recipients | Subject |
+|---|---|---|
+| Account Created | New user | `🎉 Welcome to RBPS – Your Account is Ready` |
+| Password Reset OTP | User | `🔐 RBPS Password Reset OTP` |
+| New Request Submitted | **All officers** | `📋 New Possession Request Submitted – #ENG-XXXX-XXXXX` |
+| Block Plan Approved | Engineer + all officers | `✅ Block Plan Approved & Released – #ENG-XXXX-XXXXX` |
+| Work Completed | **All officers** | `🛠️ Work Completed & Evidence Submitted – #ENG-XXXX-XXXXX` |
+| Line Certified Safe | Engineer + all officers | `🛡️ Work Verified & Line Certified Safe – #ENG-XXXX-XXXXX` |
+
+---
+
+## 🗃 Database Schema
+
+The system uses **PostgreSQL** with 11 tables + extensions:
+
+| Table | Description |
+|---|---|
+| `users` | System users with roles and department |
+| `tracks` | Physical railway track master |
+| `track_sections` | Named sections between stations (OSM-sourced) |
+| `stations` | Official Indian Railways stations with lat/lon |
+| `assets` | Railway assets (OHE, P-Way, Signal) with condition |
+| `maintenance_requests` | Block possession requests — full lifecycle |
+| `request_reviews` | Officer review decisions with notes |
+| `official_trains` | Train master (OGD India sourced) |
+| `train_stops` | Official timetable stop data |
+| `train_section_schedule` | Train-to-section time mapping |
+| `block_plans` | AI-generated sanctioned block plans |
+| `agent_runs` | AI pipeline execution logs |
+| `agent_steps` | Per-agent step results and outputs |
+| `constraint_results` | Safety verifier rule results |
+| `audit_logs` | Full audit trail of all system events |
+| `live_train_positions` | Real-time train position feed |
+| `data_sources` | Data provenance tracking |
+
+> **Offline fallback:** If PostgreSQL is unavailable, the system automatically switches to an in-memory store (`fallbackStore`) so it stays operational.
+
+---
+
+## 📁 Project Structure
+
+```
+sih-pixel-singularity/
+├── frontend/                        # React + Vite SPA
+│   ├── public/
+│   │   ├── email-demo.html          # Animated email inbox demo page
+│   │   ├── india_railways_network.geojson
+│   │   └── india_states.geojson
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── admin/               # Admin UI components
+│   │   │   ├── common/              # Shared (Navbar, Sidebar, Modal…)
+│   │   │   ├── officer/             # RequestCard, ApprovalActions, PlanExplanation
+│   │   │   └── teams/               # RequestForm, TrackPickerMap
+│   │   ├── pages/
+│   │   │   ├── admin/               # AdminDashboard
+│   │   │   ├── officer/             # OfficerRequests, ApprovedRequests, LiveMap…
+│   │   │   └── teams/               # TeamsDashboard, CheckStatus, TeamMaintenance…
+│   │   ├── context/AuthContext.jsx  # Global auth state
+│   │   ├── routes/AppRoutes.jsx     # All route definitions
+│   │   └── utils/
+│   │       ├── api.js               # Axios client + compareRequestsLatestFirst()
+│   │       └── constants.js
+│   └── vite.config.js
+│
+├── backend/                         # Express.js REST API
+│   ├── src/
+│   │   ├── config/
+│   │   │   └── database.js          # PostgreSQL pool + in-memory fallback store
+│   │   ├── controllers/
+│   │   │   ├── request.controller.js  # Main lifecycle: create, submit, review, complete
+│   │   │   ├── auth.controller.js
+│   │   │   ├── maintenance.controller.js
+│   │   │   └── …
+│   │   ├── services/
+│   │   │   ├── email.service.js     # All 6 email templates (Nodemailer)
+│   │   │   ├── agent.service.js     # Bridge to Python AI microservice
+│   │   │   └── …
+│   │   ├── middleware/
+│   │   │   ├── auth.js              # JWT verification
+│   │   │   └── roles.js             # Role-based access control
+│   │   ├── routes/                  # Express route definitions
+│   │   └── server.js                # Entry point — serves API + React build
+│   └── sql/                         # PostgreSQL migration files (001–011)
+│
+├── backend/agent-service/           # Python AI microservice (port 5001)
+│   ├── orchestrator/                # Orchestrator agent
+│   ├── block_planner/               # MCDA scoring + alternatives
+│   ├── traffic/                     # Timetable conflict + Dijkstra routing
+│   ├── safety/                      # 7-rule safety verifier
+│   ├── maintenance_risk/            # Asset criticality & failure probability
+│   └── explanation/                 # DeepSeek LLM + deterministic fallback
+│
+├── docker-compose.yml
+├── render.yaml
+└── README.md
+```
+
+---
+
+## 🚀 Setup & Installation
+
+### Prerequisites
+- Node.js 18+
+- Python 3.11+
+- PostgreSQL 15+ (or use the in-memory fallback)
+- Git
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/prajuugh/sih-pixel-singularity.git
+cd sih-pixel-singularity
+```
+
+### 2. Backend Setup
+
+```bash
+cd backend
+npm install
+cp .env.example .env   # Fill in your environment variables
+npm start
+```
+
+### 3. Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run build          # Production build served by Express
+# OR for development:
+npm run dev            # Vite dev server on port 5173
+```
+
+### 4. Python AI Agent Service (Optional)
+
+```bash
+cd backend/agent-service
+pip install -r requirements.txt
+python orchestrator/orchestrator_agent.py
+```
+
+> The backend will call the AI service at `http://localhost:5001`. If it's unavailable, requests are still processed using a rule-based fallback.
+
+### 5. Database Migrations
+
+```bash
+# Run SQL files in order against your PostgreSQL instance
+psql -U postgres -d rbps_db -f backend/sql/001_users.sql
+psql -U postgres -d rbps_db -f backend/sql/002_tracks.sql
+# ... up to 011_real_railway_schema.sql
+```
+
+### 6. Docker (All-in-One)
+
+```bash
+docker-compose up --build
+```
+
+---
+
+## 🔧 Environment Variables
+
+Create `backend/.env`:
+
+```env
+# Server
+PORT=5000
+NODE_ENV=production
+
+# Database (leave empty to use in-memory fallback)
+DATABASE_URL=postgresql://user:password@host:5432/rbps_db
+# OR individual fields:
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=rbps_db
+PGUSER=postgres
+PGPASSWORD=yourpassword
+
+# Supabase (optional)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# JWT
+JWT_SECRET=your-jwt-secret-min-32-chars
+JWT_EXPIRES_IN=7d
+
+# Email (SMTP)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM="RBPS Notification <noreply@rbps.railways.gov.in>"
+SMTP_SECURE=false
+
+# Officer emails (comma-separated fallback list)
+OFFICER_EMAILS=officer1@rbps.com,officer2@rbps.com
+
+# AI Agent microservice
+AGENT_SERVICE_URL=http://localhost:5001
+
+# OpenRouter / DeepSeek (for AI explanations)
+OPENROUTER_API_KEY=your-openrouter-key
+```
+
+---
+
+## 📡 API Reference
+
+### Authentication
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/login` | Login with username + password |
+| `POST` | `/api/auth/logout` | Invalidate session |
+| `POST` | `/api/auth/forgot-password` | Send OTP to email |
+| `POST` | `/api/auth/reset-password` | Reset with OTP |
+
+### Requests (Block Possession)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/requests` | Get all requests (role-filtered) |
+| `POST` | `/api/requests` | Create a new possession request |
+| `POST` | `/api/requests/:id/submit` | Submit for AI analysis & officer review |
+| `POST` | `/api/requests/:id/review` | Officer approve / decline / modify |
+| `POST` | `/api/requests/:id/complete` | Submit work completion + evidence |
+| `GET` | `/api/requests/:id` | Get single request with AI trace |
+
+### Users (Admin)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/users` | List all users |
+| `POST` | `/api/users` | Create user (sends welcome email) |
+| `PUT` | `/api/users/:id` | Update user details |
+| `DELETE` | `/api/users/:id` | Deactivate user |
+
+### Tracks & Map Data
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/tracks` | Get all track sections |
+| `GET` | `/api/stations` | Get all stations with coordinates |
+| `GET` | `/api/corridors` | Get corridor availability |
+| `GET` | `/api/trains` | Get train master data |
+
+---
+
+## 📊 Dataset
+
+A structured dataset package is available for research and training purposes, covering:
+
+- `users.csv` — System user roles
+- `stations.csv` — 15 real Eastern/SER Railway stations with lat/lon
+- `track_sections.csv` — Track section master with distance & electrification
+- `trains.csv` — 15 real trains (Coromandel, Rajdhani, Vande Bharat, Duronto…)
+- `timetable_train_stops.csv` — Official timetable with arrival/departure times
+- `assets.csv` — Railway assets with condition ratings
+- `possession_requests.csv` — 13 historical possession requests with AI scores
+- `ai_agent_runs.csv` — Agent execution logs
+- `mcda_scores.csv` — Per-dimension MCDA scores
+- `block_plans.csv` — Sanctioned block plans with conflict resolution
+- `work_completion_reports.csv` — Field completion records
+
+Data sourced from: **OGD India (Ministry of Railways)**, **OpenStreetMap**, and synthetic augmentation.
+
+---
+
+## 👨‍💻 Team
+
+**Team Pixel Singularity** — Smart India Hackathon 2024
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+Made with ❤️ for Indian Railways
+
+**RBPS** · Railway Block Possession System · SIH 2024
+
+</div>
