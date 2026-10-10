@@ -1,0 +1,41 @@
+services:
+  # 1. Python 4-Agent Microservice
+  - type: web
+    name: rbps-agent-service
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r agent-service/requirements.txt
+    startCommand: cd agent-service && uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_EXPLANATION_MODEL
+        value: deepseek/deepseek-chat
+      - key: OPENROUTER_EXPLANATION_TIMEOUT_SECONDS
+        value: "8"
+      - key: OPENROUTER_APP_NAME
+        value: Railway Block Planning System
+
+  # 2. Node.js Express REST API Backend
+  - type: web
+    name: rbps-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install --omit=dev
+    startCommand: node src/server.js
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: AGENT_SERVICE_URL
+        fromService:
+          type: web
+          name: rbps-agent-service
+          property: host

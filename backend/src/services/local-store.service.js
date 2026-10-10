@@ -1,0 +1,76 @@
+const fs = require("fs");
+const path = require("path");
+
+const storePath = process.env.LOCAL_STORE_PATH
+  ? path.resolve(process.env.LOCAL_STORE_PATH)
+  : path.join(__dirname, "../../data/runtime-store.json");
+
+const persistedKeys = [
+  "maintenance_requests",
+  "planning_alternatives",
+  "request_reviews",
+  "audit_logs",
+  "block_plans",
+  "blocks",
+  "block_tasks",
+  "agent_runs",
+  "agent_steps",
+  "constraint_results",
+];
+
+function snapshotStore(store) {
+  return Object.fromEntries(
+    persistedKeys.map((key) => [key, Array.isArray(store[key]) ? store[key] : []])
+  );
+}
+
+function persistLocalStore(store) {
+  try {
+    const directory = path.dirname(storePath);
+    const tempPath = `${storePath}.tmp`;
+    fs.mkdirSync(directory, { recursive: true });
+    const content = JSON.stringify(snapshotStore(store), null, 2);
+    try {
+      fs.writeFileSync(tempPath, content, "utf8");
+      try {
+        fs.renameSync(tempPath, storePath);
+      } catch (e) {
+        fs.copyFileSync(tempPath, storePath);
+        try { fs.unlinkSync(tempPath); } catch (_) {}
+      }
+    } catch (innerErr) {
+      try {
+        fs.writeFileSync(storePath, content, "utf8");
+      } catch (fallbackErr) {
+        console.warn("[LocalStore] Disk write failed (continuing in-memory):", fallbackErr.message);
+      }
+    }
+  } catch (err) {
+    console.warn("[LocalStore] Failed to persist runtime store:", err.message);
+  }
+}
+
+function hydrateLocalStore(store) {
+  if (!fs.existsSync(storePath)) {
+    persistLocalStore(store);
+    return { restored: false, requestCount: store.maintenance_requests.length };
+  }
+
+  try {
+    const saved = JSON.parse(fs.readFileSync(storePath, "utf8"));
+    for (const key of persistedKeys) {
+      if (Array.isArray(saved[key])) store[key] = saved[key];
+    }
+    return { restored: true, requestCount: store.maintenance_requests.length };
+  } catch (error) {
+    console.warn(`Local store could not be restored (${error.message}); using seed data.`);
+    persistLocalStore(store);
+    return { restored: false, requestCount: store.maintenance_requests.length };
+  }
+}
+
+module.exports = {
+  hydrateLocalStore,
+  persistLocalStore,
+  storePath,
+};
